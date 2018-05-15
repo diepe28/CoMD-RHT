@@ -16,8 +16,8 @@
 #include <string.h>
 #include <assert.h>
 
-static int myRank = 0;
-static int nRanks = 1;
+int myRank = 0;
+int nRanks = 1;
 
 #ifdef DO_MPI
 #ifdef SINGLE
@@ -48,20 +48,18 @@ int printRank()
    return 0;
 }
 
-void timestampBarrier(const char* msg)
-{
-   barrierParallel();
-   if (! printRank())
-      return;
-   time_t t= time(NULL);
-   char* timeString = ctime(&t);
-   timeString[24] = '\0'; // clobber newline
-   fprintf(screenOut, "%s: %s\n", timeString, msg);
-   fflush(screenOut);
+void timestampBarrier(const char* msg) {
+    barrierParallel();
+    if (!printRank())
+        return;
+    time_t t = time(NULL);
+    char *timeString = ctime(&t);
+    timeString[24] = '\0'; // clobber newline
+    fprintf(screenOut, "%s: %s\n", timeString, msg);
+    fflush(screenOut);
 }
 
-void initParallel(int* argc, char*** argv)
-{
+void initParallel(int* argc, char*** argv) {
 #ifdef DO_MPI
    MPI_Init(argc, argv);
    MPI_Comm_rank(MPI_COMM_WORLD, &myRank);
@@ -110,13 +108,12 @@ int sendReceiveParallel(void* sendBuf, int sendLen, int dest,
 #endif
 }
 
-void addIntParallel(int* sendBuf, int* recvBuf, int count)
-{
+void addIntParallel(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
-   MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #else
-   for (int ii=0; ii<count; ++ii)
-      recvBuf[ii] = sendBuf[ii];
+    for (int ii=0; ii<count; ++ii)
+       recvBuf[ii] = sendBuf[ii];
 #endif
 }
 

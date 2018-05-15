@@ -183,14 +183,13 @@
 ///
 /// \param [in] argc the number of command line arguments
 /// \param [in] argv the command line arguments array
-Command parseCommandLine(int argc, char** argv)
-{
+Command parseCommandLine(int argc, char** argv) {
    Command cmd;
 
    memset(cmd.potDir, 0, 1024);
    memset(cmd.potName, 0, 1024);
    memset(cmd.potType, 0, 1024);
-   strcpy(cmd.potDir,  "pots");
+   strcpy(cmd.potDir, "pots");
    strcpy(cmd.potName, "\0"); // default depends on potType
    strcpy(cmd.potType, "funcfl");
    cmd.doeam = 0;
@@ -207,39 +206,37 @@ Command parseCommandLine(int argc, char** argv)
    cmd.temperature = 600.0;
    cmd.initialDelta = 0.0;
 
-   int help=0;
+   int help = 0;
    // add arguments for processing.  Please update the html documentation too!
-   addArg("help",       'h', 0, 'i',  &(help),             0,             "print this message");
-   addArg("potDir",     'd', 1, 's',  cmd.potDir,    sizeof(cmd.potDir),  "potential directory");
-   addArg("potName",    'p', 1, 's',  cmd.potName,   sizeof(cmd.potName), "potential name");
-   addArg("potType",    't', 1, 's',  cmd.potType,   sizeof(cmd.potType), "potential type (funcfl or setfl)");
-   addArg("doeam",      'e', 0, 'i',  &(cmd.doeam),        0,             "compute eam potentials");
-   addArg("nx",         'x', 1, 'i',  &(cmd.nx),           0,             "number of unit cells in x");
-   addArg("ny",         'y', 1, 'i',  &(cmd.ny),           0,             "number of unit cells in y");
-   addArg("nz",         'z', 1, 'i',  &(cmd.nz),           0,             "number of unit cells in z");
-   addArg("xproc",      'i', 1, 'i',  &(cmd.xproc),        0,             "processors in x direction");
-   addArg("yproc",      'j', 1, 'i',  &(cmd.yproc),        0,             "processors in y direction");
-   addArg("zproc",      'k', 1, 'i',  &(cmd.zproc),        0,             "processors in z direction");
-   addArg("nSteps",     'N', 1, 'i',  &(cmd.nSteps),       0,             "number of time steps");
-   addArg("printRate",  'n', 1, 'i',  &(cmd.printRate),    0,             "number of steps between output");
-   addArg("dt",         'D', 1, 'd',  &(cmd.dt),           0,             "time step (in fs)");
-   addArg("lat",        'l', 1, 'd',  &(cmd.lat),          0,             "lattice parameter (Angstroms)");
-   addArg("temp",       'T', 1, 'd',  &(cmd.temperature),  0,             "initial temperature (K)");
-   addArg("delta",      'r', 1, 'd',  &(cmd.initialDelta), 0,             "initial delta (Angstroms)");
+   addArg("help", 'h', 0, 'i', &(help), 0, "print this message");
+   addArg("potDir", 'd', 1, 's', cmd.potDir, sizeof(cmd.potDir), "potential directory");
+   addArg("potName", 'p', 1, 's', cmd.potName, sizeof(cmd.potName), "potential name");
+   addArg("potType", 't', 1, 's', cmd.potType, sizeof(cmd.potType), "potential type (funcfl or setfl)");
+   addArg("doeam", 'e', 0, 'i', &(cmd.doeam), 0, "compute eam potentials");
+   addArg("nx", 'x', 1, 'i', &(cmd.nx), 0, "number of unit cells in x");
+   addArg("ny", 'y', 1, 'i', &(cmd.ny), 0, "number of unit cells in y");
+   addArg("nz", 'z', 1, 'i', &(cmd.nz), 0, "number of unit cells in z");
+   addArg("xproc", 'i', 1, 'i', &(cmd.xproc), 0, "processors in x direction");
+   addArg("yproc", 'j', 1, 'i', &(cmd.yproc), 0, "processors in y direction");
+   addArg("zproc", 'k', 1, 'i', &(cmd.zproc), 0, "processors in z direction");
+   addArg("nSteps", 'N', 1, 'i', &(cmd.nSteps), 0, "number of time steps");
+   addArg("printRate", 'n', 1, 'i', &(cmd.printRate), 0, "number of steps between output");
+   addArg("dt", 'D', 1, 'd', &(cmd.dt), 0, "time step (in fs)");
+   addArg("lat", 'l', 1, 'd', &(cmd.lat), 0, "lattice parameter (Angstroms)");
+   addArg("temp", 'T', 1, 'd', &(cmd.temperature), 0, "initial temperature (K)");
+   addArg("delta", 'r', 1, 'd', &(cmd.initialDelta), 0, "initial delta (Angstroms)");
 
-   processArgs(argc,argv);
+   processArgs(argc, argv);
 
    // If user didn't set potName, set type dependent default.
-   if (strlen(cmd.potName) == 0) 
-   {
-      if (strcmp(cmd.potType, "setfl" ) == 0)
+   if (strlen(cmd.potName) == 0) {
+      if (strcmp(cmd.potType, "setfl") == 0)
          strcpy(cmd.potName, "Cu01.eam.alloy");
       if (strcmp(cmd.potType, "funcfl") == 0)
          strcpy(cmd.potName, "Cu_u6.eam");
    }
-      
-   if (help)
-   {
+
+   if (help) {
       printArgs();
       freeArgs();
       exit(2);
@@ -249,29 +246,28 @@ Command parseCommandLine(int argc, char** argv)
    return cmd;
 }
 
-void printCmdYaml(FILE* file, Command* cmd)
-{
-   if (! printRank())
+void printCmdYaml(FILE* file, Command* cmd) {
+   if (!printRank())
       return;
    fprintf(file,
            "Command Line Parameters:\n"
-           "  doeam: %d\n"
-           "  potDir: %s\n"
-           "  potName: %s\n"
-           "  potType: %s\n"
-           "  nx: %d\n"
-           "  ny: %d\n"
-           "  nz: %d\n"
-           "  xproc: %d\n"
-           "  yproc: %d\n"
-           "  zproc: %d\n"
-           "  Lattice constant: %g Angstroms\n"
-           "  nSteps: %d\n"
-           "  printRate: %d\n"
-           "  Time step: %g fs\n"
-           "  Initial Temperature: %g K\n"
-           "  Initial Delta: %g Angstroms\n"
-           "\n",
+                   "  doeam: %d\n"
+                   "  potDir: %s\n"
+                   "  potName: %s\n"
+                   "  potType: %s\n"
+                   "  nx: %d\n"
+                   "  ny: %d\n"
+                   "  nz: %d\n"
+                   "  xproc: %d\n"
+                   "  yproc: %d\n"
+                   "  zproc: %d\n"
+                   "  Lattice constant: %g Angstroms\n"
+                   "  nSteps: %d\n"
+                   "  printRate: %d\n"
+                   "  Time step: %g fs\n"
+                   "  Initial Temperature: %g K\n"
+                   "  Initial Delta: %g Angstroms\n"
+                   "\n",
            cmd->doeam,
            cmd->potDir,
            cmd->potName,

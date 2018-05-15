@@ -13,6 +13,9 @@ typedef struct RankReduceDataSt
    int rank;
 } RankReduceData;
 
+extern int myRank;
+extern int nRanks;
+
 /// Return total number of processors.
 int getNRanks(void);
 
