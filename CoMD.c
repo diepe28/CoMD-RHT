@@ -98,17 +98,21 @@ int main(int argc, char** argv) {
     initSubsystems();
     timestampBarrier("Starting Initialization\n");
 
-    int replicated = 0, numRuns = 5, producerCore, consumerCore;
+    int replicated = 0, numRuns = 1, producerCore = 1, consumerCore = 3;
     double times = 0, currentElapsed;
 
     yamlAppInfo(yamlFile);
     yamlAppInfo(screenOut);
 
+    replicated = atoi(argv[1]) == 1;
+    numRuns =  atoi(argv[2]);
+    argc -= 2;
+
     Command cmd = parseCommandLine(argc, argv);
     printCmdYaml(yamlFile, &cmd);
     printCmdYaml(screenOut, &cmd);
 
-    if(replicated || 1){
+    if(replicated){
         SetThreadAffinity(producerCore);
 
         ConsumerParams *consumerParams;
@@ -201,7 +205,6 @@ double mainExecution(Command *cmd) {
 }
 
 double mainExecution_producer(Command *cmd) {
-
     SimFlat *sim = initSimulation((*cmd));
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
@@ -253,6 +256,54 @@ double mainExecution_producer(Command *cmd) {
 
 void consumer_thread_func(void *args) {
     ConsumerParams *params = (ConsumerParams *) args;
+    Command * cmd = params->command;
+
+    SimFlat *sim = initSimulation((*cmd));
+    //printSimulationDataYaml(yamlFile, sim);
+    //printSimulationDataYaml(screenOut, sim);
+
+    Validate *validate = initValidate(sim); // atom counts, energy
+    timestampBarrier("Initialization Finished\n");
+
+    timestampBarrier("Starting simulation\n");
+
+    // This is the CoMD main loop
+    const int nSteps = sim->nSteps;
+    const int printRate = sim->printRate;
+    int iStep = 0;
+    profileStart(loopTimer);
+    for (; iStep < nSteps;) {
+        startTimer(commReduceTimer);
+        sumAtoms(sim);
+        stopTimer(commReduceTimer);
+
+        printThings(sim, iStep, getElapsedTime(timestepTimer));
+
+        startTimer(timestepTimer);
+        timestep(sim, printRate, sim->dt);
+        stopTimer(timestepTimer);
+
+        iStep += printRate;
+    }
+    profileStop(loopTimer);
+
+    sumAtoms(sim);
+    printThings(sim, iStep, getElapsedTime(timestepTimer));
+    timestampBarrier("Ending simulation\n");
+
+    // Epilog
+    validateResult(validate, sim);
+    profileStop(totalTimer);
+
+    printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
+    printPerformanceResultsYaml(yamlFile);
+
+    destroySimulation(&sim);
+    comdFree(validate);
+    finalizeSubsystems();
+
+    timestampBarrier("CoMD Ending\n");
+
 }
 
 /// Initialized the main CoMD data stucture, SimFlat, based on command
@@ -267,57 +318,59 @@ void consumer_thread_func(void *args) {
 /// substructure such as the atoms need the link cells so the link cells
 /// must be initialized before the atoms.
 SimFlat* initSimulation(Command cmd) {
-   SimFlat *sim = comdMalloc(sizeof(SimFlat));
-   sim->nSteps = cmd.nSteps;
-   sim->printRate = cmd.printRate;
-   sim->dt = cmd.dt;
-   sim->domain = NULL;
-   sim->boxes = NULL;
-   sim->atoms = NULL;
-   sim->ePotential = 0.0;
-   sim->eKinetic = 0.0;
-   sim->atomExchange = NULL;
+    SimFlat *sim = comdMalloc(sizeof(SimFlat));
+    sim->nSteps = cmd.nSteps;
+    sim->printRate = cmd.printRate;
+    sim->dt = cmd.dt;
+    sim->domain = NULL;
+    sim->boxes = NULL;
+    sim->atoms = NULL;
+    sim->ePotential = 0.0;
+    sim->eKinetic = 0.0;
+    sim->atomExchange = NULL;
 
-   sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
-   real_t latticeConstant = cmd.lat;
-   if (cmd.lat < 0.0)
-      latticeConstant = sim->pot->lat;
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
+    real_t latticeConstant = cmd.lat;
+    if (cmd.lat < 0.0)
+        latticeConstant = sim->pot->lat;
 
-   // ensure input parameters make sense.
-   sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
+    // ensure input parameters make sense.
+    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
 
-   sim->species = initSpecies(sim->pot);
+    sim->species = initSpecies(sim->pot);
 
-   real3 globalExtent;
-   globalExtent[0] = cmd.nx * latticeConstant;
-   globalExtent[1] = cmd.ny * latticeConstant;
-   globalExtent[2] = cmd.nz * latticeConstant;
+    real3 globalExtent;
+    globalExtent[0] = cmd.nx * latticeConstant;
+    globalExtent[1] = cmd.ny * latticeConstant;
+    globalExtent[2] = cmd.nz * latticeConstant;
 
-   sim->domain = initDecomposition(
-           cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
+    sim->domain = initDecomposition(
+            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
 
-   sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
-   sim->atoms = initAtoms(sim->boxes);
+    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
+    sim->atoms = initAtoms(sim->boxes);
 
-   // create lattice with desired temperature and displacement.
-   createFccLattice(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
-   setTemperature(sim, cmd.temperature);
-   randomDisplacements(sim, cmd.initialDelta);
+    // create lattice with desired temperature and displacement.
+    createFccLattice(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
+    setTemperature(sim, cmd.temperature);
+    randomDisplacements(sim, cmd.initialDelta);
 
-   sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
+    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
 
-   // Forces must be computed before we call the time stepper.
-   startTimer(redistributeTimer);
-   redistributeAtoms(sim);
-   stopTimer(redistributeTimer);
+    // Forces must be computed before we call the time stepper.
+    if (printRank())
+        startTimer(redistributeTimer);
+    redistributeAtoms(sim);
 
-   startTimer(computeForceTimer);
-   computeForce(sim);
-   stopTimer(computeForceTimer);
+    stopTimer(redistributeTimer);
 
-   kineticEnergy(sim);
+    startTimer(computeForceTimer);
+    computeForce(sim);
+    stopTimer(computeForceTimer);
 
-   return sim;
+    kineticEnergy(sim);
+
+    return sim;
 }
 
 /// frees all data associated with *ps and frees *ps

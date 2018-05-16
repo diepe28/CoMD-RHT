@@ -5,6 +5,7 @@
 #define _PARALLEL_H_
 
 #include "mytype.h"
+#include "RHT.h"
 
 /// Structure for use with MPI_MINLOC and MPI_MAXLOC operations.
 typedef struct RankReduceDataSt
@@ -13,8 +14,11 @@ typedef struct RankReduceDataSt
    int rank;
 } RankReduceData;
 
+typedef enum { ProducerThread, ConsumerThread } ExecutionThread;
+
 extern int myRank;
 extern int nRanks;
+extern ExecutionThread currentThread;
 
 /// Return total number of processors.
 int getNRanks(void);

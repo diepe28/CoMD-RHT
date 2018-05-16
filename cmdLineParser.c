@@ -141,82 +141,73 @@ void printArgs()
    return;
 }
 
-void processArgs(int argc, char** argv)
-{
-   MyOption* o;
-   int n=0;
+void processArgs(int argc, char** argv) {
+   MyOption *o;
+   int n = 0;
    int i;
-   struct option* opts;
-   char* sArgs;
+   struct option *opts;
+   char *sArgs;
    int c;
 
-   if ( ! myargs) return;
+   if (!myargs) return;
    o = myargs;
-   while(o)
-   {n++,o=nextOption(o);}
+   while (o) { n++, o = nextOption(o); }
 
    o = myargs;
-   sArgs= (char*)comdCalloc(2*(n+2),sizeof(char));
-   opts = (struct option*)comdCalloc(n,sizeof(struct option));
-   for (i=0; i<n; i++)
-   {
+   sArgs = (char *) comdCalloc(2 * (n + 2), sizeof(char));
+   opts = (struct option *) comdCalloc(n, sizeof(struct option));
+   for (i = 0; i < n; i++) {
       opts[i].name = o->longArg;
       opts[i].has_arg = o->argFlag;
-      opts[i].flag    = 0;
-      opts[i].val     = o->shortArg[0];
+      opts[i].flag = 0;
+      opts[i].val = o->shortArg[0];
 
-      strcat(sArgs,(char*) o->shortArg);
-      if(o->argFlag) strcat(sArgs,":");
+      strcat(sArgs, (char *) o->shortArg);
+      if (o->argFlag) strcat(sArgs, ":");
       o = nextOption(o);
    }
 
-   while(1)
-   {
+   while (1) {
 
       int option_index = 0;
 
-      c = getopt_long (argc, argv, sArgs, opts, &option_index);
-      if ( c == -1) break;
-      o = findOption(myargs,c);
-      if ( ! o )
-      {
-         fprintf(screenOut,"\n\n"
-            "    invalid switch : -%c in getopt()\n"
-            "\n\n",
-            c);
+      c = getopt_long(argc, argv, sArgs, opts, &option_index);
+      if (c == -1) break;
+      o = findOption(myargs, c);
+      if (!o) {
+         fprintf(screenOut, "\n\n"
+                         "    invalid switch : -%c in getopt()\n"
+                         "\n\n",
+                 c);
          break;
-      }      
-      if(! o->argFlag)
-      {
-         int* i = (int*)o->ptr;
-         *i = 1;
       }
-      else 
-      {
-         switch(o->type)
-         {
+      if (!o->argFlag) {
+         int *i = (int *) o->ptr;
+         *i = 1;
+      } else {
+         switch (o->type) {
             case 'i':
-               sscanf(optarg,"%d",(int*)o->ptr);
-               break;
+               sscanf(optarg, "%d", (int *) o->ptr);
+                 break;
             case 'f':
-               sscanf(optarg,"%f",(float*)o->ptr);
-               break;
+               sscanf(optarg, "%f", (float *) o->ptr);
+                 break;
             case 'd':
-               sscanf(optarg,"%lf",(double*)o->ptr);
-               break;
+               sscanf(optarg, "%lf", (double *) o->ptr);
+                 break;
             case 's':
-               strncpy((char*)o->ptr,(char*)optarg,o->sz);
-               ((char*)o->ptr)[o->sz-1] = '\0';
-               break;
+               strncpy((char *) o->ptr, (char *) optarg, o->sz);
+                 ((char *) o->ptr)[o->sz - 1] = '\0';
+                 break;
             case 'c':
-               sscanf(optarg,"%c",(char*)o->ptr);
-               break;
+               sscanf(optarg, "%c", (char *) o->ptr);
+                 break;
             default:
-               fprintf(screenOut,"\n\n"
-                  "    invalid type : %c in getopt()\n"
-                  "    valid values are 'e', 'z'. 'i','d','f','s', and 'c'\n"
-                  "\n\n",
-                  c);      
+               fprintf(screenOut, "\n\n"
+                               "    invalid type : %c in getopt()\n"
+                               "    valid values are 'e', 'z'. 'i','d','f','s', and 'c'\n"
+                               "\n\n",
+                       c);
          }
       }
    }
