@@ -607,33 +607,129 @@ void destroyForceExchange(void* vparms)
 /// the atom exchange would immensely complicate that code.  Instead, we
 /// just sort the atoms after the atom exchange.
 void sortAtomsInCell(Atoms* atoms, LinkCell* boxes, int iBox) {
-   int nAtoms = boxes->nAtoms[iBox];
+    int nAtoms = boxes->nAtoms[iBox];
 
-   AtomMsg tmp[nAtoms];
+    AtomMsg tmp[nAtoms];
 
-   int begin = iBox * MAXATOMS;
-   int end = begin + nAtoms;
-   for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
-      tmp[iTmp].gid = atoms->gid[ii];
-      tmp[iTmp].type = atoms->iSpecies[ii];
-      tmp[iTmp].rx = atoms->r[ii][0];
-      tmp[iTmp].ry = atoms->r[ii][1];
-      tmp[iTmp].rz = atoms->r[ii][2];
-      tmp[iTmp].px = atoms->p[ii][0];
-      tmp[iTmp].py = atoms->p[ii][1];
-      tmp[iTmp].pz = atoms->p[ii][2];
-   }
-   qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
-   for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
-      atoms->gid[ii] = tmp[iTmp].gid;
-      atoms->iSpecies[ii] = tmp[iTmp].type;
-      atoms->r[ii][0] = tmp[iTmp].rx;
-      atoms->r[ii][1] = tmp[iTmp].ry;
-      atoms->r[ii][2] = tmp[iTmp].rz;
-      atoms->p[ii][0] = tmp[iTmp].px;
-      atoms->p[ii][1] = tmp[iTmp].py;
-      atoms->p[ii][2] = tmp[iTmp].pz;
-   }
+    int begin = iBox * MAXATOMS;
+    int end = begin + nAtoms;
+    // TODO, another loop pattern, although there is no calculus we need to produce every value
+    for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+        tmp[iTmp].gid = atoms->gid[ii];
+        tmp[iTmp].type = atoms->iSpecies[ii];
+        tmp[iTmp].rx = atoms->r[ii][0];
+        tmp[iTmp].ry = atoms->r[ii][1];
+        tmp[iTmp].rz = atoms->r[ii][2];
+        tmp[iTmp].px = atoms->p[ii][0];
+        tmp[iTmp].py = atoms->p[ii][1];
+        tmp[iTmp].pz = atoms->p[ii][2];
+    }
+    qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
+    for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+        atoms->gid[ii] = tmp[iTmp].gid;
+        atoms->iSpecies[ii] = tmp[iTmp].type;
+        atoms->r[ii][0] = tmp[iTmp].rx;
+        atoms->r[ii][1] = tmp[iTmp].ry;
+        atoms->r[ii][2] = tmp[iTmp].rz;
+        atoms->p[ii][0] = tmp[iTmp].px;
+        atoms->p[ii][1] = tmp[iTmp].py;
+        atoms->p[ii][2] = tmp[iTmp].pz;
+    }
+
+}
+void sortAtomsInCell_Producer(Atoms* atoms, LinkCell* boxes, int iBox) {
+    int nAtoms = boxes->nAtoms[iBox];
+
+    AtomMsg tmp[nAtoms];
+
+    int begin = iBox * MAXATOMS;
+    int end = begin + nAtoms;
+    // TODO, another loop pattern, although there is no calculus we need to produce every value
+    for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+        tmp[iTmp].gid = atoms->gid[ii];
+        tmp[iTmp].type = atoms->iSpecies[ii];
+        tmp[iTmp].rx = atoms->r[ii][0];
+        tmp[iTmp].ry = atoms->r[ii][1];
+        tmp[iTmp].rz = atoms->r[ii][2];
+        tmp[iTmp].px = atoms->p[ii][0];
+        tmp[iTmp].py = atoms->p[ii][1];
+        tmp[iTmp].pz = atoms->p[ii][2];
+        RHT_Produce_Secure(tmp[iTmp].gid);
+        RHT_Produce_Secure(tmp[iTmp].type);
+        RHT_Produce_Secure(tmp[iTmp].rx);
+        RHT_Produce_Secure(tmp[iTmp].ry);
+        RHT_Produce_Secure(tmp[iTmp].rz);
+        RHT_Produce_Secure(tmp[iTmp].px);
+        RHT_Produce_Secure(tmp[iTmp].py);
+        RHT_Produce_Secure(tmp[iTmp].pz);
+    }
+    qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
+    for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+        atoms->gid[ii] = tmp[iTmp].gid;
+        atoms->iSpecies[ii] = tmp[iTmp].type;
+        atoms->r[ii][0] = tmp[iTmp].rx;
+        atoms->r[ii][1] = tmp[iTmp].ry;
+        atoms->r[ii][2] = tmp[iTmp].rz;
+        atoms->p[ii][0] = tmp[iTmp].px;
+        atoms->p[ii][1] = tmp[iTmp].py;
+        atoms->p[ii][2] = tmp[iTmp].pz;
+        RHT_Produce_Secure(atoms->gid[ii]);
+        RHT_Produce_Secure(atoms->iSpecies[ii]);
+        RHT_Produce_Secure(atoms->r[ii][0]);
+        RHT_Produce_Secure(atoms->r[ii][1]);
+        RHT_Produce_Secure(atoms->r[ii][2]);
+        RHT_Produce_Secure(atoms->p[ii][0]);
+        RHT_Produce_Secure(atoms->p[ii][1]);
+        RHT_Produce_Secure(atoms->p[ii][2]);
+    }
+
+}
+
+void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
+    int nAtoms = boxes->nAtoms[iBox];
+
+    AtomMsg tmp[nAtoms];
+
+    int begin = iBox * MAXATOMS;
+    int end = begin + nAtoms;
+    // TODO, another loop pattern, although there is no calculus we need to produce every value
+    for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+        tmp[iTmp].gid = atoms->gid[ii];
+        tmp[iTmp].type = atoms->iSpecies[ii];
+        tmp[iTmp].rx = atoms->r[ii][0];
+        tmp[iTmp].ry = atoms->r[ii][1];
+        tmp[iTmp].rz = atoms->r[ii][2];
+        tmp[iTmp].px = atoms->p[ii][0];
+        tmp[iTmp].py = atoms->p[ii][1];
+        tmp[iTmp].pz = atoms->p[ii][2];
+        RHT_Consume_Check(tmp[iTmp].gid);
+        RHT_Consume_Check(tmp[iTmp].type);
+        RHT_Consume_Check(tmp[iTmp].rx);
+        RHT_Consume_Check(tmp[iTmp].ry);
+        RHT_Consume_Check(tmp[iTmp].rz);
+        RHT_Consume_Check(tmp[iTmp].px);
+        RHT_Consume_Check(tmp[iTmp].py);
+        RHT_Consume_Check(tmp[iTmp].pz);
+    }
+    qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
+    for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+        atoms->gid[ii] = tmp[iTmp].gid;
+        atoms->iSpecies[ii] = tmp[iTmp].type;
+        atoms->r[ii][0] = tmp[iTmp].rx;
+        atoms->r[ii][1] = tmp[iTmp].ry;
+        atoms->r[ii][2] = tmp[iTmp].rz;
+        atoms->p[ii][0] = tmp[iTmp].px;
+        atoms->p[ii][1] = tmp[iTmp].py;
+        atoms->p[ii][2] = tmp[iTmp].pz;
+        RHT_Consume_Check(atoms->gid[ii]);
+        RHT_Consume_Check(atoms->iSpecies[ii]);
+        RHT_Consume_Check(atoms->r[ii][0]);
+        RHT_Consume_Check(atoms->r[ii][1]);
+        RHT_Consume_Check(atoms->r[ii][2]);
+        RHT_Consume_Check(atoms->p[ii][0]);
+        RHT_Consume_Check(atoms->p[ii][1]);
+        RHT_Consume_Check(atoms->p[ii][2]);
+    }
 
 }
 

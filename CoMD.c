@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
     if(argc > 15) {
         replicated = 1;
 
-        //-e -i 1 -j 1 -k 1 -x 3 -y 3 -z 3, 13 params example of execution
+        //-e -i 1 -j 1 -k 1 -x 5 -y 5 -z 5 3 2 1 3, the last 4 params are ours, is 2 + numThreads
 
         numRuns = atoi(argv[14]);
         numThreads = atoi(argv[15]);

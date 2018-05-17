@@ -305,11 +305,13 @@ void redistributeAtoms_Producer(SimFlat* sim) {
     updateLinkCells_Producer(sim->boxes, sim->atoms);
 
     startTimer(atomHaloTimer);
+    // TODO, a lot of memcpys that need to be validated (but what to validate?
+    // the mem address will be different in the replica, maybe just the size of mem to be copied)
     haloExchange(sim->atomExchange, sim);
     stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
-        sortAtomsInCell(sim->atoms, sim->boxes, ii);
+        sortAtomsInCell_Producer(sim->atoms, sim->boxes, ii);
 }
 
 
@@ -321,5 +323,5 @@ void redistributeAtoms_Consumer(SimFlat* sim) {
     stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
-        sortAtomsInCell(sim->atoms, sim->boxes, ii);
+        sortAtomsInCell_Consumer(sim->atoms, sim->boxes, ii);
 }
