@@ -170,9 +170,7 @@ int main(int argc, char** argv) {
             }
 
             currentElapsed = mainExecution_producer(&cmd);
-            printf("producer ends\n\n");
             pthread_join(myThread, NULL);
-            printf("consumer also ends\n\n");
 
             if (myRank == 0) {
                 printf("Actual Walltime[%d] in seconds: %f \n", iterator,  currentElapsed);
@@ -285,14 +283,16 @@ double mainExecution(Command *cmd) {
 double mainExecution_producer(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
-    SimFlat *sim = initSimulation_Producer((*cmd));
+    //SimFlat *sim = initSimulation_Producer((*cmd));
+    SimFlat *sim = initSimulation((*cmd));
 
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
 #endif
 
-    Validate *validate = initValidate_Producer(sim); // atom counts, energy
+    //Validate *validate = initValidate_Producer(sim); // atom counts, energy
+    Validate *validate = initValidate(sim); // atom counts, energy
     timestampBarrier("Initialization Finished\n");
 
     timestampBarrier("Starting simulation\n");
@@ -363,11 +363,13 @@ void consumer_thread_func(void *args) {
 
     currentThread = ConsumerThread;
 
-    SimFlat *sim = initSimulation_Consumer((*cmd));
+    SimFlat *sim = initSimulation((*cmd));
+    //SimFlat *sim = initSimulation_Consumer((*cmd));
     //printSimulationDataYaml(yamlFile, sim);
     //printSimulationDataYaml(screenOut, sim);
 
-    Validate *validate = initValidate_Consumer(sim); // atom counts, energy
+    //Validate *validate = initValidate_Consumer(sim); // atom counts, energy
+    Validate *validate = initValidate(sim); // atom counts, energy
     //timestampBarrier("Initialization Finished\n");
 
     //timestampBarrier("Starting simulation\n");
@@ -508,8 +510,8 @@ SimFlat* initSimulation_Producer(Command cmd) {
     sim->atoms = initAtoms(sim->boxes);
 
     // create lattice with desired temperature and displacement.
-    createFccLattice(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
-    setTemperature(sim, cmd.temperature);
+    createFccLattice_Producer(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
+    setTemperature_Producer(sim, cmd.temperature);
     randomDisplacements(sim, cmd.initialDelta);
 
     sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
@@ -525,7 +527,7 @@ SimFlat* initSimulation_Producer(Command cmd) {
     computeForce(sim);
     stopTimer(computeForceTimer);
 
-    kineticEnergy(sim);
+    kineticEnergy_Producer(sim);
 
     return sim;
 }
@@ -733,7 +735,6 @@ void sumAtoms_Producer(SimFlat* s) {
     // sum atoms across all processers
     s->atoms->nLocal = 0;
     int i =0;
-
     replicate_loop_producer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
 
     startTimer(commReduceTimer);
@@ -745,11 +746,10 @@ void sumAtoms_Consumer(SimFlat* s) {
     // sum atoms across all processers
     s->atoms->nLocal = 0;
     int i =0;
-
     replicate_loop_consumer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
 
     //startTimer(commReduceTimer);
-    //addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+    addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
     //stopTimer(commReduceTimer);
 }
 

@@ -377,14 +377,16 @@ void updateLinkCells(LinkCell* boxes, Atoms* atoms) {
 }
 
 void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
-    emptyHaloCells_Producer(boxes);
+    // TODO replicate this as well
+    emptyHaloCells(boxes);
+    //emptyHaloCells_Producer(boxes);
 
     for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
         int iOff = iBox * MAXATOMS;
-        RHT_Produce(iOff);
+        RHT_Produce_Secure(iOff);
 
         int ii = 0;
-        RHT_Produce(ii);
+        RHT_Produce_Secure(ii);
         while (ii < boxes->nAtoms[iBox]) {
             int jBox = getBoxFromCoord_Producer(boxes, atoms->r[iOff + ii]);
             if (jBox != iBox)
@@ -397,7 +399,8 @@ void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
 }
 
 void updateLinkCells_Consumer(LinkCell* boxes, Atoms* atoms) {
-    emptyHaloCells_Consumer(boxes);
+    emptyHaloCells(boxes);
+    //emptyHaloCells_Consumer(boxes);
 
     for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
         int iOff = iBox * MAXATOMS;
@@ -498,7 +501,6 @@ int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]) {
     RHT_Produce_Secure(iy);
     RHT_Produce_Secure(iz);
 
-
     // For each axis, if we are inside the local domain, make sure we get
     // a local link cell.  Otherwise, make sure we get a halo link cell.
     if (rr[0] < localMax[0]) {
@@ -529,7 +531,8 @@ int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]) {
         RHT_Produce_Secure(iz);
     }
 
-    return getBoxFromTuple_Producer(boxes, ix, iy, iz);
+    //return getBoxFromTuple_Producer(boxes, ix, iy, iz);
+    return getBoxFromTuple(boxes, ix, iy, iz);
 }
 
 int getBoxFromCoord_Consumer(LinkCell* boxes, real_t rr[3]) {
@@ -578,7 +581,8 @@ int getBoxFromCoord_Consumer(LinkCell* boxes, real_t rr[3]) {
         RHT_Consume_Check(iz);
     }
 
-    return getBoxFromTuple_Consumer(boxes, ix, iy, iz);
+    //return getBoxFromTuple_Consumer(boxes, ix, iy, iz);
+    return getBoxFromTuple(boxes, ix, iy, iz);
 }
 
 /// Set the number of atoms to zero in all halo link cells.

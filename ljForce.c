@@ -120,73 +120,66 @@ void ljPrint(FILE* file, BasePotential* pot)
    fprintf(file, "  Sigma            : "FMT1" Angstroms\n", ljPot->sigma);
 }
 
-int ljForce(SimFlat* s)
-{
-   LjPotential* pot = (LjPotential *) s->pot;
+int ljForce(SimFlat* s) {
+   LjPotential *pot = (LjPotential *) s->pot;
    real_t sigma = pot->sigma;
    real_t epsilon = pot->epsilon;
    real_t rCut = pot->cutoff;
-   real_t rCut2 = rCut*rCut;
+   real_t rCut2 = rCut * rCut;
 
    // zero forces and energy
    real_t ePot = 0.0;
    s->ePotential = 0.0;
-   int fSize = s->boxes->nTotalBoxes*MAXATOMS;
-   for (int ii=0; ii<fSize; ++ii)
-   {
+   int fSize = s->boxes->nTotalBoxes * MAXATOMS;
+   for (int ii = 0; ii < fSize; ++ii) {
       zeroReal3(s->atoms->f[ii]);
       s->atoms->U[ii] = 0.;
    }
-   
-   real_t s6 = sigma*sigma*sigma*sigma*sigma*sigma;
 
-   real_t rCut6 = s6 / (rCut2*rCut2*rCut2);
+   real_t s6 = sigma * sigma * sigma * sigma * sigma * sigma;
+
+   real_t rCut6 = s6 / (rCut2 * rCut2 * rCut2);
    real_t eShift = POT_SHIFT * rCut6 * (rCut6 - 1.0);
 
    int nbrBoxes[27];
    // loop over local boxes
-   for (int iBox=0; iBox<s->boxes->nLocalBoxes; iBox++)
-   {
+   for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
       int nIBox = s->boxes->nAtoms[iBox];
-      if ( nIBox == 0 ) continue;
+      if (nIBox == 0) continue;
       int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
       // loop over neighbors of iBox
-      for (int jTmp=0; jTmp<nNbrBoxes; jTmp++)
-      {
+      for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
          int jBox = nbrBoxes[jTmp];
-         
-         assert(jBox>=0);
-         
+
+         assert(jBox >= 0);
+
          int nJBox = s->boxes->nAtoms[jBox];
-         if ( nJBox == 0 ) continue;
-         
+         if (nJBox == 0) continue;
+
          // loop over atoms in iBox
-         for (int iOff=iBox*MAXATOMS,ii=0; ii<nIBox; ii++,iOff++)
-         {
+         for (int iOff = iBox * MAXATOMS, ii = 0; ii < nIBox; ii++, iOff++) {
             int iId = s->atoms->gid[iOff];
             // loop over atoms in jBox
-            for (int jOff=MAXATOMS*jBox,ij=0; ij<nJBox; ij++,jOff++)
-            {
+            for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
                real_t dr[3];
-               int jId = s->atoms->gid[jOff];  
-               if (jBox < s->boxes->nLocalBoxes && jId <= iId )
+               int jId = s->atoms->gid[jOff];
+               if (jBox < s->boxes->nLocalBoxes && jId <= iId)
                   continue; // don't double count local-local pairs.
                real_t r2 = 0.0;
-               for (int m=0; m<3; m++)
-               {
-                  dr[m] = s->atoms->r[iOff][m]-s->atoms->r[jOff][m];
-                  r2+=dr[m]*dr[m];
+               for (int m = 0; m < 3; m++) {
+                  dr[m] = s->atoms->r[iOff][m] - s->atoms->r[jOff][m];
+                  r2 += dr[m] * dr[m];
                }
 
-               if ( r2 > rCut2) continue;
+               if (r2 > rCut2) continue;
 
                // Important note:
                // from this point on r actually refers to 1.0/r
-               r2 = 1.0/r2;
-               real_t r6 = s6 * (r2*r2*r2);
+               r2 = 1.0 / r2;
+               real_t r6 = s6 * (r2 * r2 * r2);
                real_t eLocal = r6 * (r6 - 1.0) - eShift;
-               s->atoms->U[iOff] += 0.5*eLocal;
-               s->atoms->U[jOff] += 0.5*eLocal;
+               s->atoms->U[iOff] += 0.5 * eLocal;
+               s->atoms->U[jOff] += 0.5 * eLocal;
 
                // calculate energy contribution based on whether
                // the neighbor box is local or remote
@@ -196,18 +189,17 @@ int ljForce(SimFlat* s)
                   ePot += 0.5 * eLocal;
 
                // different formulation to avoid sqrt computation
-               real_t fr = - 4.0*epsilon*r6*r2*(12.0*r6 - 6.0);
-               for (int m=0; m<3; m++)
-               {
-                  s->atoms->f[iOff][m] -= dr[m]*fr;
-                  s->atoms->f[jOff][m] += dr[m]*fr;
+               real_t fr = -4.0 * epsilon * r6 * r2 * (12.0 * r6 - 6.0);
+               for (int m = 0; m < 3; m++) {
+                  s->atoms->f[iOff][m] -= dr[m] * fr;
+                  s->atoms->f[jOff][m] += dr[m] * fr;
                }
             } // loop over atoms in jBox
          } // loop over atoms in iBox
       } // loop over neighbor boxes
    } // loop over local boxes in system
 
-   ePot = ePot*4.0*epsilon;
+   ePot = ePot * 4.0 * epsilon;
    s->ePotential = ePot;
 
    return 0;

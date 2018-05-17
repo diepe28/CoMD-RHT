@@ -289,7 +289,7 @@ void setTemperature_Producer(SimFlat* s, real_t temperature) {
             s->atoms->p[iOff][2] *= scaleFactor;
         }
     }
-    kineticEnergy(s);
+    kineticEnergy_Producer(s);
     temp = s->eKinetic / s->atoms->nGlobal / kB_eV / 1.5;
 }
 
