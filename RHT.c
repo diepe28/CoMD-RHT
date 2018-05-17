@@ -24,7 +24,7 @@ __thread long iterCountProducer;
 __thread long iterCountConsumer;
 
 
-
+// TODO REMOVE PRODUCE SECURE, it is not needed, for the new limit we call directly the inner functions
 void RHT_Produce_Secure(double value) {
 #if APPROACH_USING_POINTERS == 1
     UsingPointers_Produce(value);

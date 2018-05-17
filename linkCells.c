@@ -76,8 +76,15 @@
 #define   MAX(A,B) ((A) > (B) ? (A) : (B))
 
 static void copyAtom(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox);
+
 static int getBoxFromCoord(LinkCell* boxes, real_t rr[3]);
+static int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]);
+static int getBoxFromCoord_Consumer(LinkCell* boxes, real_t rr[3]);
+
 static void emptyHaloCells(LinkCell* boxes);
+static void emptyHaloCells_Producer(LinkCell* boxes);
+static void emptyHaloCells_Consumer(LinkCell* boxes);
+
 static void getTuple(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
 
 LinkCell* initLinkCells(const Domain* domain, real_t cutoff)
@@ -187,48 +194,120 @@ void putAtomInBox(LinkCell* boxes, Atoms* atoms,
 /// Because of the order in which the local and halo link cells are
 /// stored the indices of the halo cells are special cases.
 /// \see initLinkCells for an explanation of storage order.
-int getBoxFromTuple(LinkCell* boxes, int ix, int iy, int iz)
-{
+int getBoxFromTuple(LinkCell* boxes, int ix, int iy, int iz) {
    int iBox = 0;
-   const int* gridSize = boxes->gridSize; // alias
-   
+   const int *gridSize = boxes->gridSize; // alias
+
    // Halo in Z+
-   if (iz == gridSize[2])
-   {
-      iBox = boxes->nLocalBoxes + 2*gridSize[2]*gridSize[1] + 2*gridSize[2]*(gridSize[0]+2) +
-         (gridSize[0]+2)*(gridSize[1]+2) + (gridSize[0]+2)*(iy+1) + (ix+1);
+   if (iz == gridSize[2]) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + 2 * gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * (gridSize[1] + 2) + (gridSize[0] + 2) * (iy + 1) + (ix + 1);
    }
-   // Halo in Z-
-   else if (iz == -1)
-   {
-      iBox = boxes->nLocalBoxes + 2*gridSize[2]*gridSize[1] + 2*gridSize[2]*(gridSize[0]+2) +
-         (gridSize[0]+2)*(iy+1) + (ix+1);
+      // Halo in Z-
+   else if (iz == -1) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + 2 * gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * (iy + 1) + (ix + 1);
    }
-   // Halo in Y+
-   else if (iy == gridSize[1])
-   {
-      iBox = boxes->nLocalBoxes + 2*gridSize[2]*gridSize[1] + gridSize[2]*(gridSize[0]+2) +
-         (gridSize[0]+2)*iz + (ix+1);
+      // Halo in Y+
+   else if (iy == gridSize[1]) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * iz + (ix + 1);
    }
-   // Halo in Y-
-   else if (iy == -1)
-   {
-      iBox = boxes->nLocalBoxes + 2*gridSize[2]*gridSize[1] + iz*(gridSize[0]+2) + (ix+1);
+      // Halo in Y-
+   else if (iy == -1) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + iz * (gridSize[0] + 2) + (ix + 1);
    }
-   // Halo in X+
-   else if (ix == gridSize[0])
-   {
-      iBox = boxes->nLocalBoxes + gridSize[1]*gridSize[2] + iz*gridSize[1] + iy;
+      // Halo in X+
+   else if (ix == gridSize[0]) {
+      iBox = boxes->nLocalBoxes + gridSize[1] * gridSize[2] + iz * gridSize[1] + iy;
    }
-   // Halo in X-
-   else if (ix == -1)
-   {
-      iBox = boxes->nLocalBoxes + iz*gridSize[1] + iy;
+      // Halo in X-
+   else if (ix == -1) {
+      iBox = boxes->nLocalBoxes + iz * gridSize[1] + iy;
    }
-   // local link celll.
-   else
-   {
-      iBox = ix + gridSize[0]*iy + gridSize[0]*gridSize[1]*iz;
+      // local link celll.
+   else {
+      iBox = ix + gridSize[0] * iy + gridSize[0] * gridSize[1] * iz;
+   }
+   assert(iBox >= 0);
+   assert(iBox < boxes->nTotalBoxes);
+
+   return iBox;
+}
+int getBoxFromTuple_Producer(LinkCell* boxes, int ix, int iy, int iz) {
+   int iBox = 0;
+   const int *gridSize = boxes->gridSize; // alias
+
+   // Halo in Z+
+   if (iz == gridSize[2]) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + 2 * gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * (gridSize[1] + 2) + (gridSize[0] + 2) * (iy + 1) + (ix + 1);
+   }
+      // Halo in Z-
+   else if (iz == -1) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + 2 * gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * (iy + 1) + (ix + 1);
+   }
+      // Halo in Y+
+   else if (iy == gridSize[1]) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * iz + (ix + 1);
+   }
+      // Halo in Y-
+   else if (iy == -1) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + iz * (gridSize[0] + 2) + (ix + 1);
+   }
+      // Halo in X+
+   else if (ix == gridSize[0]) {
+      iBox = boxes->nLocalBoxes + gridSize[1] * gridSize[2] + iz * gridSize[1] + iy;
+   }
+      // Halo in X-
+   else if (ix == -1) {
+      iBox = boxes->nLocalBoxes + iz * gridSize[1] + iy;
+   }
+      // local link celll.
+   else {
+      iBox = ix + gridSize[0] * iy + gridSize[0] * gridSize[1] * iz;
+   }
+   assert(iBox >= 0);
+   assert(iBox < boxes->nTotalBoxes);
+
+   return iBox;
+}
+int getBoxFromTuple_Consumer(LinkCell* boxes, int ix, int iy, int iz) {
+   int iBox = 0;
+   const int *gridSize = boxes->gridSize; // alias
+
+   // Halo in Z+
+   if (iz == gridSize[2]) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + 2 * gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * (gridSize[1] + 2) + (gridSize[0] + 2) * (iy + 1) + (ix + 1);
+   }
+      // Halo in Z-
+   else if (iz == -1) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + 2 * gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * (iy + 1) + (ix + 1);
+   }
+      // Halo in Y+
+   else if (iy == gridSize[1]) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + gridSize[2] * (gridSize[0] + 2) +
+             (gridSize[0] + 2) * iz + (ix + 1);
+   }
+      // Halo in Y-
+   else if (iy == -1) {
+      iBox = boxes->nLocalBoxes + 2 * gridSize[2] * gridSize[1] + iz * (gridSize[0] + 2) + (ix + 1);
+   }
+      // Halo in X+
+   else if (ix == gridSize[0]) {
+      iBox = boxes->nLocalBoxes + gridSize[1] * gridSize[2] + iz * gridSize[1] + iy;
+   }
+      // Halo in X-
+   else if (ix == -1) {
+      iBox = boxes->nLocalBoxes + iz * gridSize[1] + iy;
+   }
+      // local link celll.
+   else {
+      iBox = ix + gridSize[0] * iy + gridSize[0] * gridSize[1] * iz;
    }
    assert(iBox >= 0);
    assert(iBox < boxes->nTotalBoxes);
@@ -240,8 +319,7 @@ int getBoxFromTuple(LinkCell* boxes, int ix, int iy, int iz)
 /// \param iId [in]  The index with box iBox of the atom to be moved.
 /// \param iBox [in] The index of the link cell the particle is moving from.
 /// \param jBox [in] The index of the link cell the particle is moving to.
-void moveAtom(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox)
-{
+void moveAtom(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
    int nj = boxes->nAtoms[jBox];
    copyAtom(boxes, atoms, iId, iBox, nj, jBox);
    boxes->nAtoms[jBox]++;
@@ -254,7 +332,7 @@ void moveAtom(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox)
 
    if (jBox > boxes->nLocalBoxes)
       --atoms->nLocal;
-   
+
    return;
 }
 
@@ -271,23 +349,52 @@ void moveAtom(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox)
 /// to halo atoms.  Such atom must be sent to other tasks by a halo
 /// exchange to avoid being lost.
 /// \see redistributeAtoms
-void updateLinkCells(LinkCell* boxes, Atoms* atoms)
-{
+void updateLinkCells(LinkCell* boxes, Atoms* atoms) {
    emptyHaloCells(boxes);
-   
-   for (int iBox=0; iBox<boxes->nLocalBoxes; ++iBox)
-   {
-      int iOff = iBox*MAXATOMS;
-      int ii=0;
-      while (ii < boxes->nAtoms[iBox])
-      {
-         int jBox = getBoxFromCoord(boxes, atoms->r[iOff+ii]);
+
+   for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
+      int iOff = iBox * MAXATOMS;
+      int ii = 0;
+      while (ii < boxes->nAtoms[iBox]) {
+         int jBox = getBoxFromCoord(boxes, atoms->r[iOff + ii]);
          if (jBox != iBox)
             moveAtom(boxes, atoms, ii, iBox, jBox);
          else
             ++ii;
       }
    }
+}
+
+void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
+    emptyHaloCells_Producer(boxes);
+
+    for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
+        int iOff = iBox * MAXATOMS;
+        int ii = 0;
+        while (ii < boxes->nAtoms[iBox]) {
+            int jBox = getBoxFromCoord_Producer(boxes, atoms->r[iOff + ii]);
+            if (jBox != iBox)
+                moveAtom(boxes, atoms, ii, iBox, jBox);
+            else
+                ++ii;
+        }
+    }
+}
+
+void updateLinkCells_Consumer(LinkCell* boxes, Atoms* atoms) {
+    emptyHaloCells_Consumer(boxes);
+
+    for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
+        int iOff = iBox * MAXATOMS;
+        int ii = 0;
+        while (ii < boxes->nAtoms[iBox]) {
+            int jBox = getBoxFromCoord_Consumer(boxes, atoms->r[iOff + ii]);
+            if (jBox != iBox)
+                moveAtom(boxes, atoms, ii, iBox, jBox);
+            else
+                ++ii;
+        }
+    }
 }
 
 /// \return The largest number of atoms in any link cell.
@@ -331,45 +438,141 @@ void copyAtom(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int
 /// assignments for atoms that are near a link cell boundaries.  If no
 /// ranks claim an atom in a local cell it will be lost.  If multiple
 /// ranks claim an atom it will be duplicated.
-int getBoxFromCoord(LinkCell* boxes, real_t rr[3])
-{
-   const real_t* localMin = boxes->localMin; // alias
-   const real_t* localMax = boxes->localMax; // alias
-   const int*    gridSize = boxes->gridSize; // alias
-   int ix = (int)(floor((rr[0] - localMin[0])*boxes->invBoxSize[0]));
-   int iy = (int)(floor((rr[1] - localMin[1])*boxes->invBoxSize[1]));
-   int iz = (int)(floor((rr[2] - localMin[2])*boxes->invBoxSize[2]));
+int getBoxFromCoord(LinkCell* boxes, real_t rr[3]) {
+   const real_t *localMin = boxes->localMin; // alias
+   const real_t *localMax = boxes->localMax; // alias
+   const int *gridSize = boxes->gridSize; // alias
+   int ix = (int) (floor((rr[0] - localMin[0]) * boxes->invBoxSize[0]));
+   int iy = (int) (floor((rr[1] - localMin[1]) * boxes->invBoxSize[1]));
+   int iz = (int) (floor((rr[2] - localMin[2]) * boxes->invBoxSize[2]));
 
 
    // For each axis, if we are inside the local domain, make sure we get
    // a local link cell.  Otherwise, make sure we get a halo link cell.
-   if (rr[0] < localMax[0]) 
-   {
+   if (rr[0] < localMax[0]) {
       if (ix == gridSize[0]) ix = gridSize[0] - 1;
-   }
-   else
+   } else
       ix = gridSize[0]; // assign to halo cell
-   if (rr[1] < localMax[1])
-   {
+   if (rr[1] < localMax[1]) {
       if (iy == gridSize[1]) iy = gridSize[1] - 1;
-   }
-   else
+   } else
       iy = gridSize[1];
-   if (rr[2] < localMax[2])
-   {
+   if (rr[2] < localMax[2]) {
       if (iz == gridSize[2]) iz = gridSize[2] - 1;
-   }
-   else
+   } else
       iz = gridSize[2];
-   
+
    return getBoxFromTuple(boxes, ix, iy, iz);
 }
 
+int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]) {
+    const real_t *localMin = boxes->localMin; // alias
+    const real_t *localMax = boxes->localMax; // alias
+    const int *gridSize = boxes->gridSize; // alias
+    int ix = (int) (floor((rr[0] - localMin[0]) * boxes->invBoxSize[0]));
+    int iy = (int) (floor((rr[1] - localMin[1]) * boxes->invBoxSize[1]));
+    int iz = (int) (floor((rr[2] - localMin[2]) * boxes->invBoxSize[2]));
+    RHT_Produce_Secure(ix);
+    RHT_Produce_Secure(iy);
+    RHT_Produce_Secure(iz);
+
+
+    // For each axis, if we are inside the local domain, make sure we get
+    // a local link cell.  Otherwise, make sure we get a halo link cell.
+    if (rr[0] < localMax[0]) {
+        if (ix == gridSize[0]) {
+            ix = gridSize[0] - 1;
+            RHT_Produce_Secure(ix);
+        }
+    } else {
+        ix = gridSize[0]; // assign to halo cell
+        RHT_Produce_Secure(ix);
+    }
+    if (rr[1] < localMax[1]) {
+        if (iy == gridSize[1]) {
+            iy = gridSize[1] - 1;
+            RHT_Produce_Secure(iy);
+        }
+    } else {
+        iy = gridSize[1];
+        RHT_Produce_Secure(iy);
+    }
+    if (rr[2] < localMax[2]) {
+        if (iz == gridSize[2]) {
+            iz = gridSize[2] - 1;
+            RHT_Produce_Secure(iz);
+        }
+    } else {
+        iz = gridSize[2];
+        RHT_Produce_Secure(iz);
+    }
+
+    return getBoxFromTuple_Producer(boxes, ix, iy, iz);
+}
+
+int getBoxFromCoord_Consumer(LinkCell* boxes, real_t rr[3]) {
+    const real_t *localMin = boxes->localMin; // alias
+    const real_t *localMax = boxes->localMax; // alias
+    const int *gridSize = boxes->gridSize; // alias
+    int ix = (int) (floor((rr[0] - localMin[0]) * boxes->invBoxSize[0]));
+    int iy = (int) (floor((rr[1] - localMin[1]) * boxes->invBoxSize[1]));
+    int iz = (int) (floor((rr[2] - localMin[2]) * boxes->invBoxSize[2]));
+
+    RHT_Consume_Check(ix);
+    RHT_Consume_Check(iy);
+    RHT_Consume_Check(iz);
+
+    // For each axis, if we are inside the local domain, make sure we get
+    // a local link cell.  Otherwise, make sure we get a halo link cell.
+    if (rr[0] < localMax[0]) {
+        if (ix == gridSize[0]) {
+            ix = gridSize[0] - 1;
+            RHT_Consume_Check(ix);
+        }
+    } else {
+        ix = gridSize[0]; // assign to halo cell
+        RHT_Consume_Check(ix);
+    }
+    if (rr[1] < localMax[1]) {
+        if (iy == gridSize[1]) {
+            iy = gridSize[1] - 1;
+            RHT_Consume_Check(iy);
+        }
+    } else {
+        iy = gridSize[1];
+        RHT_Consume_Check(iy);
+    }
+    if (rr[2] < localMax[2]) {
+        if (iz == gridSize[2]) {
+            iz = gridSize[2] - 1;
+            RHT_Consume_Check(iz);
+        }
+    } else {
+        iz = gridSize[2];
+        RHT_Consume_Check(iz);
+    }
+
+    return getBoxFromTuple_Consumer(boxes, ix, iy, iz);
+}
+
 /// Set the number of atoms to zero in all halo link cells.
-void emptyHaloCells(LinkCell* boxes)
-{
-   for (int ii=boxes->nLocalBoxes; ii<boxes->nTotalBoxes; ++ii)
+void emptyHaloCells(LinkCell* boxes) {
+   for (int ii = boxes->nLocalBoxes; ii < boxes->nTotalBoxes; ++ii)
       boxes->nAtoms[ii] = 0;
+}
+
+void emptyHaloCells_Producer(LinkCell* boxes) {
+//    int ii = boxes->nLocalBoxes;
+//    replicate_loop_producer(boxes->nLocalBoxes,boxes->nTotalBoxes, ii, ++ii,boxes->nAtoms[ii],boxes->nAtoms[ii] = 0;)
+    for (int ii = boxes->nLocalBoxes; ii < boxes->nTotalBoxes; ++ii)
+        boxes->nAtoms[ii] = 0;
+}
+
+void emptyHaloCells_Consumer(LinkCell* boxes) {
+//    int ii = boxes->nLocalBoxes;
+//    replicate_loop_consumer(boxes->nLocalBoxes,boxes->nTotalBoxes, ii, ++ii,boxes->nAtoms[ii],boxes->nAtoms[ii] = 0;)
+    for (int ii = boxes->nLocalBoxes; ii < boxes->nTotalBoxes; ++ii)
+        boxes->nAtoms[ii] = 0;
 }
 
 /// Get the grid coordinates of the link cell with index iBox.  Local

@@ -20,5 +20,7 @@ void kineticEnergy_Consumer(SimFlat* s);
 
 /// Update local and remote link cells after atoms have moved.
 void redistributeAtoms(struct SimFlatSt* sim);
+void redistributeAtoms_Producer(struct SimFlatSt* sim);
+void redistributeAtoms_Consumer(struct SimFlatSt* sim);
 
 #endif

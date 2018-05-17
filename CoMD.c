@@ -78,6 +78,9 @@ static BasePotential* initPotential(
    int doeam, const char* potDir, const char* potName, const char* potType);
 static SpeciesData* initSpecies(BasePotential* pot);
 static Validate* initValidate(SimFlat* s);
+static Validate* initValidate_Producer(SimFlat* s);
+static Validate* initValidate_Consumer(SimFlat* s);
+
 static void validateResult(const Validate* val, SimFlat *sim);
 
 static void sumAtoms(SimFlat* s);
@@ -107,7 +110,7 @@ int main(int argc, char** argv) {
     timestampBarrier("Starting Initialization\n");
     currentThread = ProducerThread;
 
-    int replicated = 0, numRuns = 1, producerCore = 0, consumerCore = 3;
+    int replicated = 0, numRuns = 1, numThreads, producerCore = 0, consumerCore = 3;
     double times = 0, currentElapsed;
 
     yamlAppInfo(yamlFile);
@@ -115,9 +118,29 @@ int main(int argc, char** argv) {
     yamlAppInfo(screenOut);
 #endif
 
-    replicated = atoi(argv[1]) == 1;
-    numRuns =  atoi(argv[2]);
-    argc -= 2;
+    if(myRank == 0)
+        printf("\n-------- Will execute the ");
+
+    if(argc > 15) {
+        replicated = 1;
+
+        //-e -i 1 -j 1 -k 1 -x 3 -y 3 -z 3, 13 params example of execution
+
+        numRuns = atoi(argv[14]);
+        numThreads = atoi(argv[15]);
+
+        producerCore = atoi(argv[myRank * 2 + 16]);
+        consumerCore = atoi(argv[myRank * 2 + 17]);
+
+        printf("Replicated version -- Cores: %d,%d --", producerCore, consumerCore);
+        argc -= (numThreads + 2); //numThreads
+    }else{
+        printf("NOT Replicated version %d,%d -- ", producerCore, consumerCore);
+        numRuns = atoi(argv[14]);
+        argc--;
+    }
+
+    printf(" %d times\n\n", numRuns);
 
     Command cmd = parseCommandLine(argc, argv);
     printCmdYaml(yamlFile, &cmd);
@@ -147,7 +170,9 @@ int main(int argc, char** argv) {
             }
 
             currentElapsed = mainExecution_producer(&cmd);
+            printf("producer ends\n\n");
             pthread_join(myThread, NULL);
+            printf("consumer also ends\n\n");
 
             if (myRank == 0) {
                 printf("Actual Walltime[%d] in seconds: %f \n", iterator,  currentElapsed);
@@ -246,7 +271,6 @@ double mainExecution(Command *cmd) {
     finalizeSubsystems();
 
     timestampBarrier("CoMD Ending\n");
-
     //dperez, this is where the replicated execution ends
     if(myRank == 0) {
         clock_gettime(CLOCK_MONOTONIC, &endExe);
@@ -261,14 +285,14 @@ double mainExecution(Command *cmd) {
 double mainExecution_producer(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
-    SimFlat *sim = initSimulation((*cmd));
+    SimFlat *sim = initSimulation_Producer((*cmd));
 
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
 #endif
 
-    Validate *validate = initValidate(sim); // atom counts, energy
+    Validate *validate = initValidate_Producer(sim); // atom counts, energy
     timestampBarrier("Initialization Finished\n");
 
     timestampBarrier("Starting simulation\n");
@@ -285,20 +309,20 @@ double mainExecution_producer(Command *cmd) {
     profileStart(loopTimer);
     for (; iStep < nSteps;) {
         startTimer(commReduceTimer);
-        sumAtoms(sim);
+        sumAtoms_Producer(sim);
         stopTimer(commReduceTimer);
 
         printThings(sim, iStep, getElapsedTime(timestepTimer));
 
         startTimer(timestepTimer);
-        timestep(sim, printRate, sim->dt);
+        timestep_Producer(sim, printRate, sim->dt);
         stopTimer(timestepTimer);
 
         iStep += printRate;
     }
     profileStop(loopTimer);
 
-    sumAtoms(sim);
+    sumAtoms_Producer(sim);
     printThings(sim, iStep, getElapsedTime(timestepTimer));
     timestampBarrier("Ending simulation\n");
 
@@ -316,6 +340,11 @@ double mainExecution_producer(Command *cmd) {
     finalizeSubsystems();
 
     timestampBarrier("CoMD Ending\n");
+
+#if APPROACH_SRMT == 1
+    // done replication but UNIT might not have been reached
+    srmtQueue.enqPtr = srmtQueue.enqPtrDB;
+#endif
 
     //dperez, this is where the replicated execution ends
     if(myRank == 0) {
@@ -338,10 +367,10 @@ void consumer_thread_func(void *args) {
     //printSimulationDataYaml(yamlFile, sim);
     //printSimulationDataYaml(screenOut, sim);
 
-    Validate *validate = initValidate(sim); // atom counts, energy
-    timestampBarrier("Initialization Finished\n");
+    Validate *validate = initValidate_Consumer(sim); // atom counts, energy
+    //timestampBarrier("Initialization Finished\n");
 
-    timestampBarrier("Starting simulation\n");
+    //timestampBarrier("Starting simulation\n");
 
     // This is the CoMD main loop
     const int nSteps = sim->nSteps;
@@ -362,20 +391,20 @@ void consumer_thread_func(void *args) {
     //profileStop(loopTimer);
 
     sumAtoms_Consumer(sim);
-    timestampBarrier("Ending simulation\n");
+//    timestampBarrier("Ending simulation\n");
 
     // Epilog
-    validateResult(validate, sim);
-    //profileStop(totalTimer);
+//    validateResult(validate, sim);
+//    profileStop(totalTimer);
 
-    printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
-    printPerformanceResultsYaml(yamlFile);
+//    printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
+//    printPerformanceResultsYaml(yamlFile);
 
     destroySimulation(&sim);
     comdFree(validate);
 
-    //finalizeSubsystems();
-    timestampBarrier("CoMD Ending\n");
+//    finalizeSubsystems();
+//    timestampBarrier("CoMD Ending\n");
 }
 
 /// Initialized the main CoMD data stucture, SimFlat, based on command
@@ -631,6 +660,39 @@ Validate* initValidate(SimFlat* sim) {
    return val;
 }
 
+
+Validate* initValidate_Producer(SimFlat* sim) {
+    sumAtoms_Producer(sim);
+    Validate *val = comdMalloc(sizeof(Validate));
+    val->eTot0 = (sim->ePotential + sim->eKinetic) / sim->atoms->nGlobal;
+    val->nAtoms0 = sim->atoms->nGlobal;
+
+    if (printRank()) {
+        fprintf(screenOut, "\n");
+        printSeparator(screenOut);
+        fprintf(screenOut, "Initial energy : %14.12f, atom count : %d \n",
+                val->eTot0, val->nAtoms0);
+        fprintf(screenOut, "\n");
+    }
+    return val;
+}
+
+Validate* initValidate_Consumer(SimFlat* sim) {
+    sumAtoms_Consumer(sim);
+    Validate *val = comdMalloc(sizeof(Validate));
+    val->eTot0 = (sim->ePotential + sim->eKinetic) / sim->atoms->nGlobal;
+    val->nAtoms0 = sim->atoms->nGlobal;
+
+//    if (printRank()) {
+//        fprintf(screenOut, "\n");
+//        printSeparator(screenOut);
+//        fprintf(screenOut, "Initial energy : %14.12f, atom count : %d \n",
+//                val->eTot0, val->nAtoms0);
+//        fprintf(screenOut, "\n");
+//    }
+    return val;
+}
+
 void validateResult(const Validate* val, SimFlat* sim) {
    if (printRank()) {
       real_t eFinal = (sim->ePotential + sim->eKinetic) / sim->atoms->nGlobal;
@@ -670,9 +732,9 @@ void sumAtoms(SimFlat* s) {
 void sumAtoms_Producer(SimFlat* s) {
     // sum atoms across all processers
     s->atoms->nLocal = 0;
-    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
-        s->atoms->nLocal += s->boxes->nAtoms[i];
-    }
+    int i =0;
+
+    replicate_loop_producer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
 
     startTimer(commReduceTimer);
     addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
@@ -682,9 +744,9 @@ void sumAtoms_Producer(SimFlat* s) {
 void sumAtoms_Consumer(SimFlat* s) {
     // sum atoms across all processers
     s->atoms->nLocal = 0;
-    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
-        s->atoms->nLocal += s->boxes->nAtoms[i];
-    }
+    int i =0;
+
+    replicate_loop_consumer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
 
     //startTimer(commReduceTimer);
     //addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);

@@ -242,9 +242,8 @@ void destroyHaloExchange(HaloExchange** haloExchange)
    *haloExchange = NULL;
 }
 
-void haloExchange(HaloExchange* haloExchange, void* data)
-{
-   for (int iAxis=0; iAxis<3; ++iAxis)
+void haloExchange(HaloExchange* haloExchange, void* data) {
+   for (int iAxis = 0; iAxis < 3; ++iAxis)
       exchangeData(haloExchange, data, iAxis);
 }
 
@@ -273,15 +272,14 @@ HaloExchange* initHaloExchange(Domain* domain)
 /// \param [in] iAxis     Axis index.
 /// \param [in, out] data Pointer to data that will be passed to the load and
 ///                       unload functions
-void exchangeData(HaloExchange* haloExchange, void* data, int iAxis)
-{
-   enum HaloFaceOrder faceM = 2*iAxis;
-   enum HaloFaceOrder faceP = faceM+1;
+void exchangeData(HaloExchange* haloExchange, void* data, int iAxis) {
+   enum HaloFaceOrder faceM = 2 * iAxis;
+   enum HaloFaceOrder faceP = faceM + 1;
 
-   char* sendBufM = comdMalloc(haloExchange->bufCapacity);
-   char* sendBufP = comdMalloc(haloExchange->bufCapacity);
-   char* recvBufM = comdMalloc(haloExchange->bufCapacity);
-   char* recvBufP = comdMalloc(haloExchange->bufCapacity);
+   char *sendBufM = comdMalloc(haloExchange->bufCapacity);
+   char *sendBufP = comdMalloc(haloExchange->bufCapacity);
+   char *recvBufM = comdMalloc(haloExchange->bufCapacity);
+   char *recvBufP = comdMalloc(haloExchange->bufCapacity);
 
    int nSendM = haloExchange->loadBuffer(haloExchange->parms, data, faceM, sendBufM);
    int nSendP = haloExchange->loadBuffer(haloExchange->parms, data, faceP, sendBufP);
@@ -295,7 +293,7 @@ void exchangeData(HaloExchange* haloExchange, void* data, int iAxis)
    nRecvP = sendReceiveParallel(sendBufM, nSendM, nbrRankM, recvBufP, haloExchange->bufCapacity, nbrRankP);
    nRecvM = sendReceiveParallel(sendBufP, nSendP, nbrRankP, recvBufM, haloExchange->bufCapacity, nbrRankM);
    stopTimer(commHaloTimer);
-   
+
    haloExchange->unloadBuffer(haloExchange->parms, data, faceM, nRecvM, recvBufM);
    haloExchange->unloadBuffer(haloExchange->parms, data, faceP, nRecvP, recvBufP);
    comdFree(recvBufP);
@@ -608,38 +606,35 @@ void destroyForceExchange(void* vparms)
 /// from one task to another.  Trying to maintain the atom order during
 /// the atom exchange would immensely complicate that code.  Instead, we
 /// just sort the atoms after the atom exchange.
-void sortAtomsInCell(Atoms* atoms, LinkCell* boxes, int iBox)
-{
+void sortAtomsInCell(Atoms* atoms, LinkCell* boxes, int iBox) {
    int nAtoms = boxes->nAtoms[iBox];
 
    AtomMsg tmp[nAtoms];
 
-   int begin = iBox*MAXATOMS;
+   int begin = iBox * MAXATOMS;
    int end = begin + nAtoms;
-   for (int ii=begin, iTmp=0; ii<end; ++ii, ++iTmp)
-   {
-      tmp[iTmp].gid  = atoms->gid[ii];
+   for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+      tmp[iTmp].gid = atoms->gid[ii];
       tmp[iTmp].type = atoms->iSpecies[ii];
-      tmp[iTmp].rx =   atoms->r[ii][0];
-      tmp[iTmp].ry =   atoms->r[ii][1];
-      tmp[iTmp].rz =   atoms->r[ii][2];
-      tmp[iTmp].px =   atoms->p[ii][0];
-      tmp[iTmp].py =   atoms->p[ii][1];
-      tmp[iTmp].pz =   atoms->p[ii][2];
+      tmp[iTmp].rx = atoms->r[ii][0];
+      tmp[iTmp].ry = atoms->r[ii][1];
+      tmp[iTmp].rz = atoms->r[ii][2];
+      tmp[iTmp].px = atoms->p[ii][0];
+      tmp[iTmp].py = atoms->p[ii][1];
+      tmp[iTmp].pz = atoms->p[ii][2];
    }
    qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
-   for (int ii=begin, iTmp=0; ii<end; ++ii, ++iTmp)
-   {
-      atoms->gid[ii]   = tmp[iTmp].gid;
+   for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
+      atoms->gid[ii] = tmp[iTmp].gid;
       atoms->iSpecies[ii] = tmp[iTmp].type;
-      atoms->r[ii][0]  = tmp[iTmp].rx;
-      atoms->r[ii][1]  = tmp[iTmp].ry;
-      atoms->r[ii][2]  = tmp[iTmp].rz;
-      atoms->p[ii][0]  = tmp[iTmp].px;
-      atoms->p[ii][1]  = tmp[iTmp].py;
-      atoms->p[ii][2]  = tmp[iTmp].pz;
+      atoms->r[ii][0] = tmp[iTmp].rx;
+      atoms->r[ii][1] = tmp[iTmp].ry;
+      atoms->r[ii][2] = tmp[iTmp].rz;
+      atoms->p[ii][0] = tmp[iTmp].px;
+      atoms->p[ii][1] = tmp[iTmp].py;
+      atoms->p[ii][2] = tmp[iTmp].pz;
    }
-   
+
 }
 
 ///  A function suitable for passing to qsort to sort atoms by gid.

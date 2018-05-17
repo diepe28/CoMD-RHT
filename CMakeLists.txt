@@ -16,10 +16,10 @@ set(CMAKE_CXX_STANDARD 11)
 #-ftree-vectorize
 
 # mpi or not
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE -DDO_MPI -DMPICH_IGNORE_CXX_SEEK")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDO_MPI -DMPICH_IGNORE_CXX_SEEK")
 
 # print output to console and files
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPRINT_CMD=0")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE -DPRINT_CMD=0")
 
 # fast math or not, there is a problem when nan values are found when this options is enabled
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
@@ -36,14 +36,14 @@ set(FLAGS_CURRENT "${CMAKE_CXX_FLAGS}")
 
 # These are other approaches of the literature
 set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_USING_POINTERS=0")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_ALREADY_CONSUMED=0 ")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_SRMT=0")
+set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_ALREADY_CONSUMED=0")
+set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_SRMT=1")
 
 # These are our approaches
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_CONSUMER_NO_SYNC=1")
+set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_CONSUMER_NO_SYNC=0")
 set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_NEW_LIMIT=0") # new limit includes the consumer no sync
 set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_WRITE_INVERTED_NEW_LIMIT=0")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DVAR_GROUPING=1") # it can be used with any of the below approaches
+set(FLAGS_CURRENT "${FLAGS_CURRENT} -DVAR_GROUPING=0") # it can be used with any of the below approaches
 
 set(SOURCE_FILES
         CoMD.c cmdLineParser.h cmdLineParser.c CoMD_info.h CoMDTypes.h

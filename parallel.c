@@ -124,6 +124,26 @@ void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count) {
 #endif
 }
 
+void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
+#ifdef DO_MPI
+    MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
+    // TODO, must send data to consumer
+#else
+    for (int ii=0; ii<count; ++ii)
+        recvBuf[ii] = sendBuf[ii];
+#endif
+}
+
+void addRealParallel_Consumer(real_t* sendBuf, real_t* recvBuf, int count) {
+#ifdef DO_MPI
+    //MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
+    // TODO, must get data from producer
+#else
+    for (int ii=0; ii<count; ++ii)
+        recvBuf[ii] = sendBuf[ii];
+#endif
+}
+
 void addDoubleParallel(double* sendBuf, double* recvBuf, int count) {
 #ifdef DO_MPI
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
