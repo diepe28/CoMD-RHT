@@ -131,37 +131,35 @@ static void typeNotSupported(const char* callSite, const char* type);
 /// \param [in] dir   The directory in which potential table files are found.
 /// \param [in] file  The name of the potential table file.
 /// \param [in] type  The file format of the potential file (setfl or funcfl).
-BasePotential* initEamPot(const char* dir, const char* file, const char* type)
-{
-   EamPotential* pot = comdMalloc(sizeof(EamPotential));
+BasePotential* initEamPot(const char* dir, const char* file, const char* type) {
+   EamPotential *pot = comdMalloc(sizeof(EamPotential));
    assert(pot);
    pot->force = eamForce;
    pot->print = eamPrint;
    pot->destroy = eamDestroy;
    pot->phi = NULL;
    pot->rho = NULL;
-   pot->f   = NULL;
+   pot->f = NULL;
 
    // Initialization of the next three items requires information about
    // the parallel decomposition and link cells that isn't available
    // with the potential is initialized.  Hence, we defer their
    // initialization until the first time we call the force routine.
    pot->dfEmbed = NULL;
-   pot->rhobar  = NULL;
+   pot->rhobar = NULL;
    pot->forceExchange = NULL;
 
-   if (getMyRank() == 0)
-   {
-      if (strcmp(type, "setfl" ) == 0)
+   if (getMyRank() == 0) {
+      if (strcmp(type, "setfl") == 0)
          eamReadSetfl(pot, dir, file);
-      else if (strcmp(type,"funcfl") == 0)
+      else if (strcmp(type, "funcfl") == 0)
          eamReadFuncfl(pot, dir, file);
       else
          typeNotSupported("initEamPot", type);
    }
    eamBcastPotential(pot);
-   
-   return (BasePotential*) pot;
+
+   return (BasePotential *) pot;
 }
 
 /// Calculate potential energy and forces for the EAM potential.

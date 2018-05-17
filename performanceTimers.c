@@ -89,6 +89,17 @@ typedef struct TimerGlobalSt
 static Timers perfTimer[numberOfTimers];
 static TimerGlobal perfGlobal;
 
+// TODO reset timer every run
+//static Timers* perfTimer;
+
+void TimersNew(){
+    //perfTimer = (Timers*) (malloc(sizeof(Timers) * numberOfTimers));
+}
+
+void TimersFree(){
+    free(perfTimer);
+}
+
 void profileStart(const enum TimerHandle handle) {
    perfTimer[handle].start = getTime();
 }

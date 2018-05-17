@@ -66,6 +66,9 @@
 #define   MIN(A,B) ((A) < (B) ? (A) : (B))
 
 static SimFlat* initSimulation(Command cmd);
+static SimFlat* initSimulation_Producer(Command cmd);
+static SimFlat* initSimulation_Consumer(Command cmd);
+
 static void destroySimulation(SimFlat** ps);
 
 static void initSubsystems(void);
@@ -78,6 +81,8 @@ static Validate* initValidate(SimFlat* s);
 static void validateResult(const Validate* val, SimFlat *sim);
 
 static void sumAtoms(SimFlat* s);
+static void sumAtoms_Producer(SimFlat* s);
+static void sumAtoms_Consumer(SimFlat* s);
 static void printThings(SimFlat* s, int iStep, double elapsedTime);
 static void printSimulationDataYaml(FILE* file, SimFlat* s);
 static void sanityChecks(Command cmd, double cutoff, double latticeConst, char latticeType[8]);
@@ -94,15 +99,21 @@ typedef struct {
 int main(int argc, char** argv) {
     // Prolog
     initParallel(&argc, &argv);
+
+    //TimersNew();
+
     profileStart(totalTimer);
     initSubsystems();
     timestampBarrier("Starting Initialization\n");
+    currentThread = ProducerThread;
 
-    int replicated = 0, numRuns = 1, producerCore = 1, consumerCore = 3;
+    int replicated = 0, numRuns = 1, producerCore = 0, consumerCore = 3;
     double times = 0, currentElapsed;
 
     yamlAppInfo(yamlFile);
+#if DPRINT_CMD == 1
     yamlAppInfo(screenOut);
+#endif
 
     replicated = atoi(argv[1]) == 1;
     numRuns =  atoi(argv[2]);
@@ -110,7 +121,9 @@ int main(int argc, char** argv) {
 
     Command cmd = parseCommandLine(argc, argv);
     printCmdYaml(yamlFile, &cmd);
+#if DPRINT_CMD == 1
     printCmdYaml(screenOut, &cmd);
+#endif
 
     if(replicated){
         SetThreadAffinity(producerCore);
@@ -147,22 +160,53 @@ int main(int argc, char** argv) {
 
             RHT_Replication_Finish();
         }
+
+        if(myRank == 0) {
+            printf("\n -------- Summary Replicated Version ----------- \n");
+            printf("Mean time in seconds: %f \n\n", times / numRuns);
+        }
+
     }else {
-        mainExecution(&cmd);
+        for (int iterator = 0; iterator < numRuns; iterator++) {
+            currentElapsed = mainExecution(&cmd);
+
+            if (myRank == 0) {
+                printf("Baseline - Walltime[%d] in seconds: %f \n", iterator,  currentElapsed);
+                times += currentElapsed;
+
+//                TimersFree();
+//                TimersNew();
+            }
+        }
+
+        if(myRank == 0) {
+            printf("\n -------- Summary Baseline ----------- \n");
+            printf("Mean time in seconds: %f \n\n", times / numRuns);
+        }
     }
 
+    destroyParallel();
     return 0;
 }
 
 double mainExecution(Command *cmd) {
+    struct timespec startExe, endExe;
+    double elapsedExe = 0;
     SimFlat *sim = initSimulation((*cmd));
+#if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
+#endif
 
     Validate *validate = initValidate(sim); // atom counts, energy
     timestampBarrier("Initialization Finished\n");
 
     timestampBarrier("Starting simulation\n");
+
+    //dperez, here is where the timer of the actual replicated execution starts...
+    if(myRank == 0) {
+        clock_gettime(CLOCK_MONOTONIC, &startExe);
+    }
 
     // This is the CoMD main loop
     const int nSteps = sim->nSteps;
@@ -192,27 +236,47 @@ double mainExecution(Command *cmd) {
     validateResult(validate, sim);
     profileStop(totalTimer);
 
+#if PRINT_CMD == 1
     printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
     printPerformanceResultsYaml(yamlFile);
+#endif
 
     destroySimulation(&sim);
     comdFree(validate);
     finalizeSubsystems();
 
     timestampBarrier("CoMD Ending\n");
-    destroyParallel();
-    return 0;
+
+    //dperez, this is where the replicated execution ends
+    if(myRank == 0) {
+        clock_gettime(CLOCK_MONOTONIC, &endExe);
+
+        elapsedExe = (endExe.tv_sec - startExe.tv_sec);
+        elapsedExe += (endExe.tv_nsec - startExe.tv_nsec) / 1000000000.0;
+    }
+
+    return elapsedExe;
 }
 
 double mainExecution_producer(Command *cmd) {
+    struct timespec startExe, endExe;
+    double elapsedExe = 0;
     SimFlat *sim = initSimulation((*cmd));
+
+#if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
+#endif
 
     Validate *validate = initValidate(sim); // atom counts, energy
     timestampBarrier("Initialization Finished\n");
 
     timestampBarrier("Starting simulation\n");
+
+    //dperez, here is where the timer of the actual replicated execution starts...
+    if(myRank == 0) {
+        clock_gettime(CLOCK_MONOTONIC, &startExe);
+    }
 
     // This is the CoMD main loop
     const int nSteps = sim->nSteps;
@@ -242,23 +306,35 @@ double mainExecution_producer(Command *cmd) {
     validateResult(validate, sim);
     profileStop(totalTimer);
 
+#if PRINT_CMD == 1
     printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
     printPerformanceResultsYaml(yamlFile);
+#endif
 
     destroySimulation(&sim);
     comdFree(validate);
     finalizeSubsystems();
 
     timestampBarrier("CoMD Ending\n");
-    destroyParallel();
-    return 0;
+
+    //dperez, this is where the replicated execution ends
+    if(myRank == 0) {
+        clock_gettime(CLOCK_MONOTONIC, &endExe);
+
+        elapsedExe = (endExe.tv_sec - startExe.tv_sec);
+        elapsedExe += (endExe.tv_nsec - startExe.tv_nsec) / 1000000000.0;
+    }
+
+    return elapsedExe;
 }
 
 void consumer_thread_func(void *args) {
     ConsumerParams *params = (ConsumerParams *) args;
     Command * cmd = params->command;
 
-    SimFlat *sim = initSimulation((*cmd));
+    currentThread = ConsumerThread;
+
+    SimFlat *sim = initSimulation_Consumer((*cmd));
     //printSimulationDataYaml(yamlFile, sim);
     //printSimulationDataYaml(screenOut, sim);
 
@@ -271,39 +347,35 @@ void consumer_thread_func(void *args) {
     const int nSteps = sim->nSteps;
     const int printRate = sim->printRate;
     int iStep = 0;
-    profileStart(loopTimer);
+    //profileStart(loopTimer);
     for (; iStep < nSteps;) {
-        startTimer(commReduceTimer);
-        sumAtoms(sim);
-        stopTimer(commReduceTimer);
+        //startTimer(commReduceTimer);
+        sumAtoms_Consumer(sim);
+        //stopTimer(commReduceTimer);
 
-        printThings(sim, iStep, getElapsedTime(timestepTimer));
-
-        startTimer(timestepTimer);
-        timestep(sim, printRate, sim->dt);
-        stopTimer(timestepTimer);
+        //startTimer(timestepTimer);
+        timestep_Consumer(sim, printRate, sim->dt);
+        //stopTimer(timestepTimer);
 
         iStep += printRate;
     }
-    profileStop(loopTimer);
+    //profileStop(loopTimer);
 
-    sumAtoms(sim);
-    printThings(sim, iStep, getElapsedTime(timestepTimer));
+    sumAtoms_Consumer(sim);
     timestampBarrier("Ending simulation\n");
 
     // Epilog
     validateResult(validate, sim);
-    profileStop(totalTimer);
+    //profileStop(totalTimer);
 
     printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
     printPerformanceResultsYaml(yamlFile);
 
     destroySimulation(&sim);
     comdFree(validate);
-    finalizeSubsystems();
 
+    //finalizeSubsystems();
     timestampBarrier("CoMD Ending\n");
-
 }
 
 /// Initialized the main CoMD data stucture, SimFlat, based on command
@@ -373,6 +445,118 @@ SimFlat* initSimulation(Command cmd) {
     return sim;
 }
 
+SimFlat* initSimulation_Producer(Command cmd) {
+    SimFlat *sim = comdMalloc(sizeof(SimFlat));
+    sim->nSteps = cmd.nSteps;
+    sim->printRate = cmd.printRate;
+    sim->dt = cmd.dt;
+    sim->domain = NULL;
+    sim->boxes = NULL;
+    sim->atoms = NULL;
+    sim->ePotential = 0.0;
+    sim->eKinetic = 0.0;
+    sim->atomExchange = NULL;
+
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
+    real_t latticeConstant = cmd.lat;
+    if (cmd.lat < 0.0)
+        latticeConstant = sim->pot->lat;
+
+    // ensure input parameters make sense.
+    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
+
+    sim->species = initSpecies(sim->pot);
+
+    real3 globalExtent;
+    globalExtent[0] = cmd.nx * latticeConstant;
+    globalExtent[1] = cmd.ny * latticeConstant;
+    globalExtent[2] = cmd.nz * latticeConstant;
+
+    sim->domain = initDecomposition(
+            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
+
+    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
+    sim->atoms = initAtoms(sim->boxes);
+
+    // create lattice with desired temperature and displacement.
+    createFccLattice(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
+    setTemperature(sim, cmd.temperature);
+    randomDisplacements(sim, cmd.initialDelta);
+
+    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
+
+    // Forces must be computed before we call the time stepper.
+    if (printRank())
+        startTimer(redistributeTimer);
+    redistributeAtoms(sim);
+
+    stopTimer(redistributeTimer);
+
+    startTimer(computeForceTimer);
+    computeForce(sim);
+    stopTimer(computeForceTimer);
+
+    kineticEnergy(sim);
+
+    return sim;
+}
+
+SimFlat* initSimulation_Consumer(Command cmd) {
+    SimFlat *sim = comdMalloc(sizeof(SimFlat));
+    sim->nSteps = cmd.nSteps;
+    sim->printRate = cmd.printRate;
+    sim->dt = cmd.dt;
+    sim->domain = NULL;
+    sim->boxes = NULL;
+    sim->atoms = NULL;
+    sim->ePotential = 0.0;
+    sim->eKinetic = 0.0;
+    sim->atomExchange = NULL;
+
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
+    real_t latticeConstant = cmd.lat;
+    if (cmd.lat < 0.0)
+        latticeConstant = sim->pot->lat;
+
+    // ensure input parameters make sense.
+    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
+
+    sim->species = initSpecies(sim->pot);
+
+    real3 globalExtent;
+    globalExtent[0] = cmd.nx * latticeConstant;
+    globalExtent[1] = cmd.ny * latticeConstant;
+    globalExtent[2] = cmd.nz * latticeConstant;
+
+    sim->domain = initDecomposition(
+            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
+
+    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
+    sim->atoms = initAtoms(sim->boxes);
+
+    // create lattice with desired temperature and displacement.
+    createFccLattice_Consumer(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
+    setTemperature_Consumer(sim, cmd.temperature);
+    randomDisplacements(sim, cmd.initialDelta);
+
+    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
+
+    // Forces must be computed before we call the time stepper.
+    if (printRank())
+        startTimer(redistributeTimer);
+    redistributeAtoms(sim);
+
+//    stopTimer(redistributeTimer);
+
+//    startTimer(computeForceTimer);
+    computeForce(sim);
+//    stopTimer(computeForceTimer);
+
+    kineticEnergy_Consumer(sim);
+
+    return sim;
+}
+
 /// frees all data associated with *ps and frees *ps
 void destroySimulation(SimFlat** ps) {
    if (!ps) return;
@@ -411,14 +595,14 @@ void finalizeSubsystems(void) {
 /// decide whether to get LJ or EAM potentials
 BasePotential* initPotential(
    int doeam, const char* potDir, const char* potName, const char* potType) {
-   BasePotential *pot = NULL;
+    BasePotential *pot = NULL;
 
-   if (doeam)
-      pot = initEamPot(potDir, potName, potType);
-   else
-      pot = initLjPot();
-   assert(pot);
-   return pot;
+    if (doeam)
+        pot = initEamPot(potDir, potName, potType);
+    else
+        pot = initLjPot();
+    assert(pot);
+    return pot;
 }
 
 SpeciesData* initSpecies(BasePotential* pot) {
@@ -483,6 +667,30 @@ void sumAtoms(SimFlat* s) {
    stopTimer(commReduceTimer);
 }
 
+void sumAtoms_Producer(SimFlat* s) {
+    // sum atoms across all processers
+    s->atoms->nLocal = 0;
+    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
+        s->atoms->nLocal += s->boxes->nAtoms[i];
+    }
+
+    startTimer(commReduceTimer);
+    addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+    stopTimer(commReduceTimer);
+}
+
+void sumAtoms_Consumer(SimFlat* s) {
+    // sum atoms across all processers
+    s->atoms->nLocal = 0;
+    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
+        s->atoms->nLocal += s->boxes->nAtoms[i];
+    }
+
+    //startTimer(commReduceTimer);
+    //addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+    //stopTimer(commReduceTimer);
+}
+
 /// Prints current time, energy, performance etc to monitor the state of
 /// the running simulation.  Performance per atom is scaled by the
 /// number of local atoms per process this should give consistent timing
@@ -511,6 +719,11 @@ void printThings(SimFlat* s, int iStep, double elapsedTime) {
    real_t eK = s->eKinetic / s->atoms->nGlobal;
    real_t eU = s->ePotential / s->atoms->nGlobal;
    real_t Temp = (s->eKinetic / s->atoms->nGlobal) / (kB_eV * 1.5);
+
+//    if(nEval == 0)
+//        printf("nEval is the zero\n");
+//    if(s->atoms->nLocal == 0)
+//        printf("s->atoms->nLocal is the zero\n");
 
    double timePerAtom = 1.0e6 * elapsedTime / (double) (nEval * s->atoms->nLocal);
 

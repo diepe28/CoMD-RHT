@@ -18,7 +18,7 @@ typedef enum { ProducerThread, ConsumerThread } ExecutionThread;
 
 extern int myRank;
 extern int nRanks;
-extern ExecutionThread currentThread;
+extern _Thread_local ExecutionThread currentThread;
 
 /// Return total number of processors.
 int getNRanks(void);

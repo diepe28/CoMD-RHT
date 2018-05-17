@@ -28,12 +28,10 @@ static void advancePosition(SimFlat* s, int nBoxes, real_t dt);
 /// the next call.
 ///
 /// After nSteps the kinetic energy is computed for diagnostic output.
-double timestep(SimFlat* s, int nSteps, real_t dt)
-{
-   for (int ii=0; ii<nSteps; ++ii)
-   {
+double timestep(SimFlat* s, int nSteps, real_t dt) {
+   for (int ii = 0; ii < nSteps; ++ii) {
       startTimer(velocityTimer);
-      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5*dt); 
+      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5 * dt);
       stopTimer(velocityTimer);
 
       startTimer(positionTimer);
@@ -49,7 +47,7 @@ double timestep(SimFlat* s, int nSteps, real_t dt)
       stopTimer(computeForceTimer);
 
       startTimer(velocityTimer);
-      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5*dt); 
+      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5 * dt);
       stopTimer(velocityTimer);
    }
 
@@ -58,56 +56,102 @@ double timestep(SimFlat* s, int nSteps, real_t dt)
    return s->ePotential;
 }
 
-void computeForce(SimFlat* s)
-{
+double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
+   for (int ii = 0; ii < nSteps; ++ii) {
+      startTimer(velocityTimer);
+      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5 * dt);
+      stopTimer(velocityTimer);
+
+      startTimer(positionTimer);
+      advancePosition(s, s->boxes->nLocalBoxes, dt);
+      stopTimer(positionTimer);
+
+      startTimer(redistributeTimer);
+      redistributeAtoms(s);
+      stopTimer(redistributeTimer);
+
+      startTimer(computeForceTimer);
+      computeForce(s);
+      stopTimer(computeForceTimer);
+
+      startTimer(velocityTimer);
+      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5 * dt);
+      stopTimer(velocityTimer);
+   }
+
+   kineticEnergy(s);
+
+   return s->ePotential;
+}
+
+double timestep_Consumer(SimFlat* s, int nSteps, real_t dt) {
+   for (int ii = 0; ii < nSteps; ++ii) {
+      //startTimer(velocityTimer);
+      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5 * dt);
+      //stopTimer(velocityTimer);
+
+      //startTimer(positionTimer);
+      advancePosition(s, s->boxes->nLocalBoxes, dt);
+      //stopTimer(positionTimer);
+
+      //startTimer(redistributeTimer);
+      redistributeAtoms(s);
+      //stopTimer(redistributeTimer);
+
+      //startTimer(computeForceTimer);
+      computeForce(s);
+      //stopTimer(computeForceTimer);
+
+      //startTimer(velocityTimer);
+      advanceVelocity(s, s->boxes->nLocalBoxes, 0.5 * dt);
+      //stopTimer(velocityTimer);
+   }
+
+   kineticEnergy_Consumer(s);
+
+   return s->ePotential;
+}
+
+void computeForce(SimFlat* s) {
    s->pot->force(s);
 }
 
 
-void advanceVelocity(SimFlat* s, int nBoxes, real_t dt)
-{
-   for (int iBox=0; iBox<nBoxes; iBox++)
-   {
-      for (int iOff=MAXATOMS*iBox,ii=0; ii<s->boxes->nAtoms[iBox]; ii++,iOff++)
-      {
-         s->atoms->p[iOff][0] += dt*s->atoms->f[iOff][0];
-         s->atoms->p[iOff][1] += dt*s->atoms->f[iOff][1];
-         s->atoms->p[iOff][2] += dt*s->atoms->f[iOff][2];
+void advanceVelocity(SimFlat* s, int nBoxes, real_t dt) {
+   for (int iBox = 0; iBox < nBoxes; iBox++) {
+      for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
+         s->atoms->p[iOff][0] += dt * s->atoms->f[iOff][0];
+         s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
+         s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
       }
    }
 }
 
-void advancePosition(SimFlat* s, int nBoxes, real_t dt)
-{
-   for (int iBox=0; iBox<nBoxes; iBox++)
-   {
-      for (int iOff=MAXATOMS*iBox,ii=0; ii<s->boxes->nAtoms[iBox]; ii++,iOff++)
-      {
+void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
+   for (int iBox = 0; iBox < nBoxes; iBox++) {
+      for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
          int iSpecies = s->atoms->iSpecies[iOff];
-         real_t invMass = 1.0/s->species[iSpecies].mass;
-         s->atoms->r[iOff][0] += dt*s->atoms->p[iOff][0]*invMass;
-         s->atoms->r[iOff][1] += dt*s->atoms->p[iOff][1]*invMass;
-         s->atoms->r[iOff][2] += dt*s->atoms->p[iOff][2]*invMass;
+         real_t invMass = 1.0 / s->species[iSpecies].mass;
+         s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
+         s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
+         s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
       }
    }
 }
 
 /// Calculates total kinetic and potential energy across all tasks.  The
 /// local potential energy is a by-product of the force routine.
-void kineticEnergy(SimFlat* s)
-{
+void kineticEnergy(SimFlat* s) {
    real_t eLocal[2];
    eLocal[0] = s->ePotential;
    eLocal[1] = 0;
-   for (int iBox=0; iBox<s->boxes->nLocalBoxes; iBox++)
-   {
-      for (int iOff=MAXATOMS*iBox,ii=0; ii<s->boxes->nAtoms[iBox]; ii++,iOff++)
-      {
+   for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+      for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
          int iSpecies = s->atoms->iSpecies[iOff];
-         real_t invMass = 0.5/s->species[iSpecies].mass;
-         eLocal[1] += ( s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
-         s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
-         s->atoms->p[iOff][2] * s->atoms->p[iOff][2] )*invMass;
+         real_t invMass = 0.5 / s->species[iSpecies].mass;
+         eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                       s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                       s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
       }
    }
 
@@ -118,6 +162,52 @@ void kineticEnergy(SimFlat* s)
 
    s->ePotential = eSum[0];
    s->eKinetic = eSum[1];
+}
+
+void kineticEnergy_Producer(SimFlat* s) {
+    real_t eLocal[2];
+    eLocal[0] = s->ePotential;
+    eLocal[1] = 0;
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t invMass = 0.5 / s->species[iSpecies].mass;
+            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
+        }
+    }
+
+    real_t eSum[2];
+    startTimer(commReduceTimer);
+    addRealParallel(eLocal, eSum, 2);
+    stopTimer(commReduceTimer);
+
+    s->ePotential = eSum[0];
+    s->eKinetic = eSum[1];
+}
+
+void kineticEnergy_Consumer(SimFlat* s) {
+    real_t eLocal[2];
+    eLocal[0] = s->ePotential;
+    eLocal[1] = 0;
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t invMass = 0.5 / s->species[iSpecies].mass;
+            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
+        }
+    }
+
+    real_t eSum[2];
+//    startTimer(commReduceTimer);
+    addRealParallel(eLocal, eSum, 2);
+//    stopTimer(commReduceTimer);
+
+    s->ePotential = eSum[0];
+    s->eKinetic = eSum[1];
 }
 
 /// \details
@@ -133,14 +223,13 @@ void kineticEnergy(SimFlat* s)
 /// \see updateLinkCells
 /// \see initAtomHaloExchange
 /// \see sortAtomsInCell
-void redistributeAtoms(SimFlat* sim)
-{
+void redistributeAtoms(SimFlat* sim) {
    updateLinkCells(sim->boxes, sim->atoms);
 
    startTimer(atomHaloTimer);
    haloExchange(sim->atomExchange, sim);
    stopTimer(atomHaloTimer);
 
-   for (int ii=0; ii<sim->boxes->nTotalBoxes; ++ii)
+   for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
       sortAtomsInCell(sim->atoms, sim->boxes, ii);
 }

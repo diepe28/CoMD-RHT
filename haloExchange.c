@@ -141,48 +141,46 @@ static int sortAtomsById(const void* a, const void* b);
 ///   simulation domain, the factor is +1.0.
 ///
 /// \see redistributeAtoms
-HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes)
-{
-   HaloExchange* hh = initHaloExchange(domain);
-   
-   int size0 = (boxes->gridSize[1]+2)*(boxes->gridSize[2]+2);
-   int size1 = (boxes->gridSize[0]+2)*(boxes->gridSize[2]+2);
-   int size2 = (boxes->gridSize[0]+2)*(boxes->gridSize[1]+2);
+HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes) {
+   HaloExchange *hh = initHaloExchange(domain);
+
+   int size0 = (boxes->gridSize[1] + 2) * (boxes->gridSize[2] + 2);
+   int size1 = (boxes->gridSize[0] + 2) * (boxes->gridSize[2] + 2);
+   int size2 = (boxes->gridSize[0] + 2) * (boxes->gridSize[1] + 2);
    int maxSize = MAX(size0, size1);
    maxSize = MAX(size1, size2);
-   hh->bufCapacity = maxSize*2*MAXATOMS*sizeof(AtomMsg);
-   
+   hh->bufCapacity = maxSize * 2 * MAXATOMS * sizeof(AtomMsg);
+
    hh->loadBuffer = loadAtomsBuffer;
    hh->unloadBuffer = unloadAtomsBuffer;
    hh->destroy = destroyAtomsExchange;
 
-   AtomExchangeParms* parms = comdMalloc(sizeof(AtomExchangeParms));
+   AtomExchangeParms *parms = comdMalloc(sizeof(AtomExchangeParms));
 
-   parms->nCells[HALO_X_MINUS] = 2*(boxes->gridSize[1]+2)*(boxes->gridSize[2]+2);
-   parms->nCells[HALO_Y_MINUS] = 2*(boxes->gridSize[0]+2)*(boxes->gridSize[2]+2);
-   parms->nCells[HALO_Z_MINUS] = 2*(boxes->gridSize[0]+2)*(boxes->gridSize[1]+2);
-   parms->nCells[HALO_X_PLUS]  = parms->nCells[HALO_X_MINUS];
-   parms->nCells[HALO_Y_PLUS]  = parms->nCells[HALO_Y_MINUS];
-   parms->nCells[HALO_Z_PLUS]  = parms->nCells[HALO_Z_MINUS];
+   parms->nCells[HALO_X_MINUS] = 2 * (boxes->gridSize[1] + 2) * (boxes->gridSize[2] + 2);
+   parms->nCells[HALO_Y_MINUS] = 2 * (boxes->gridSize[0] + 2) * (boxes->gridSize[2] + 2);
+   parms->nCells[HALO_Z_MINUS] = 2 * (boxes->gridSize[0] + 2) * (boxes->gridSize[1] + 2);
+   parms->nCells[HALO_X_PLUS] = parms->nCells[HALO_X_MINUS];
+   parms->nCells[HALO_Y_PLUS] = parms->nCells[HALO_Y_MINUS];
+   parms->nCells[HALO_Z_PLUS] = parms->nCells[HALO_Z_MINUS];
 
-   for (int ii=0; ii<6; ++ii)
+   for (int ii = 0; ii < 6; ++ii)
       parms->cellList[ii] = mkAtomCellList(boxes, ii, parms->nCells[ii]);
 
-   for (int ii=0; ii<6; ++ii)
-   {
-      parms->pbcFactor[ii] = comdMalloc(3*sizeof(real_t));
-      for (int jj=0; jj<3; ++jj)
+   for (int ii = 0; ii < 6; ++ii) {
+      parms->pbcFactor[ii] = comdMalloc(3 * sizeof(real_t));
+      for (int jj = 0; jj < 3; ++jj)
          parms->pbcFactor[ii][jj] = 0.0;
    }
-   int* procCoord = domain->procCoord; //alias
-   int* procGrid  = domain->procGrid; //alias
-   if (procCoord[HALO_X_AXIS] == 0)                       parms->pbcFactor[HALO_X_MINUS][HALO_X_AXIS] = +1.0;
-   if (procCoord[HALO_X_AXIS] == procGrid[HALO_X_AXIS]-1) parms->pbcFactor[HALO_X_PLUS][HALO_X_AXIS]  = -1.0;
-   if (procCoord[HALO_Y_AXIS] == 0)                       parms->pbcFactor[HALO_Y_MINUS][HALO_Y_AXIS] = +1.0;
-   if (procCoord[HALO_Y_AXIS] == procGrid[HALO_Y_AXIS]-1) parms->pbcFactor[HALO_Y_PLUS][HALO_Y_AXIS]  = -1.0;
-   if (procCoord[HALO_Z_AXIS] == 0)                       parms->pbcFactor[HALO_Z_MINUS][HALO_Z_AXIS] = +1.0;
-   if (procCoord[HALO_Z_AXIS] == procGrid[HALO_Z_AXIS]-1) parms->pbcFactor[HALO_Z_PLUS][HALO_Z_AXIS]  = -1.0;
-   
+   int *procCoord = domain->procCoord; //alias
+   int *procGrid = domain->procGrid; //alias
+   if (procCoord[HALO_X_AXIS] == 0) parms->pbcFactor[HALO_X_MINUS][HALO_X_AXIS] = +1.0;
+   if (procCoord[HALO_X_AXIS] == procGrid[HALO_X_AXIS] - 1) parms->pbcFactor[HALO_X_PLUS][HALO_X_AXIS] = -1.0;
+   if (procCoord[HALO_Y_AXIS] == 0) parms->pbcFactor[HALO_Y_MINUS][HALO_Y_AXIS] = +1.0;
+   if (procCoord[HALO_Y_AXIS] == procGrid[HALO_Y_AXIS] - 1) parms->pbcFactor[HALO_Y_PLUS][HALO_Y_AXIS] = -1.0;
+   if (procCoord[HALO_Z_AXIS] == 0) parms->pbcFactor[HALO_Z_MINUS][HALO_Z_AXIS] = +1.0;
+   if (procCoord[HALO_Z_AXIS] == procGrid[HALO_Z_AXIS] - 1) parms->pbcFactor[HALO_Z_PLUS][HALO_Z_AXIS] = -1.0;
+
    hh->parms = parms;
    return hh;
 }

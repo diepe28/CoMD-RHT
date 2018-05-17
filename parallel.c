@@ -18,7 +18,7 @@
 
 int myRank = 0;
 int nRanks = 1;
-ExecutionThread currentThread = ProducerThread;
+_Thread_local ExecutionThread currentThread = ProducerThread;
 
 #ifdef DO_MPI
 #ifdef SINGLE
@@ -44,7 +44,7 @@ int getMyRank()
 /// more complex.  It is also possible to suppress practically all
 /// output by causing this function to return 0 for all ranks.
 int printRank() {
-    if (myRank == 0 || currentThread == ProducerThread) return 1;
+    if (myRank == 0 && currentThread == ProducerThread) return 1;
     return 0;
 }
 

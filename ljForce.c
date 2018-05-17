@@ -87,24 +87,23 @@ void ljDestroy(BasePotential** inppot)
 }
 
 /// Initialize an Lennard Jones potential for Copper.
-BasePotential* initLjPot(void)
-{
-   LjPotential *pot = (LjPotential*)comdMalloc(sizeof(LjPotential));
+BasePotential* initLjPot(void) {
+   LjPotential *pot = (LjPotential *) comdMalloc(sizeof(LjPotential));
    pot->force = ljForce;
    pot->print = ljPrint;
    pot->destroy = ljDestroy;
-   pot->sigma = 2.315;	                  // Angstrom
+   pot->sigma = 2.315;                      // Angstrom
    pot->epsilon = 0.167;                  // eV
    pot->mass = 63.55 * amuToInternalMass; // Atomic Mass Units (amu)
 
    pot->lat = 3.615;                      // Equilibrium lattice const in Angs
    strcpy(pot->latticeType, "FCC");       // lattice type, i.e. FCC, BCC, etc.
-   pot->cutoff = 2.5*pot->sigma;          // Potential cutoff in Angs
+   pot->cutoff = 2.5 * pot->sigma;          // Potential cutoff in Angs
 
    strcpy(pot->name, "Cu");
    pot->atomicNo = 29;
 
-   return (BasePotential*) pot;
+   return (BasePotential *) pot;
 }
 
 void ljPrint(FILE* file, BasePotential* pot)
