@@ -135,7 +135,7 @@ void advanceVelocity(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
-    // TODO increase macro to support this loop patter with multiple values to produce
+    // TODO improve macro to support this loop patter with multiple values to produce
     // We can have the values as the last values of the macro to have a arg list separated by comma
     // and we can send the number of values to replicate in order to use the info for the var grouping
     for (int iBox = 0; iBox < nBoxes; iBox++) {
@@ -176,6 +176,7 @@ void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
+    // TODO improve macro to support this loop patter with multiple values to produce, same as before
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             int iSpecies = s->atoms->iSpecies[iOff];
