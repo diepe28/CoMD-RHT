@@ -92,6 +92,8 @@ ForceMsg;
 
 static HaloExchange* initHaloExchange(Domain* domain);
 static void exchangeData(HaloExchange* haloExchange, void* data, int iAxis);
+static void exchangeData_Producer(HaloExchange* haloExchange, void* data, int iAxis);
+static void exchangeData_Consumer(HaloExchange* haloExchange, void* data, int iAxis);
 
 static int* mkAtomCellList(LinkCell* boxes, enum HaloFaceOrder iFace, const int nCells);
 static int loadAtomsBuffer(void* vparms, void* data, int face, char* charBuf);
@@ -200,38 +202,36 @@ HaloExchange* initAtomHaloExchange(Domain* domain, LinkCell* boxes) {
 ///
 /// \see eam.c for an explanation of the requirement to exchange
 /// force data.
-HaloExchange* initForceHaloExchange(Domain* domain, LinkCell* boxes)
-{
-   HaloExchange* hh = initHaloExchange(domain);
+HaloExchange* initForceHaloExchange(Domain* domain, LinkCell* boxes) {
+    HaloExchange *hh = initHaloExchange(domain);
 
-   hh->loadBuffer = loadForceBuffer;
-   hh->unloadBuffer = unloadForceBuffer;
-   hh->destroy = destroyForceExchange;
+    hh->loadBuffer = loadForceBuffer;
+    hh->unloadBuffer = unloadForceBuffer;
+    hh->destroy = destroyForceExchange;
 
-   int size0 = (boxes->gridSize[1])*(boxes->gridSize[2]);
-   int size1 = (boxes->gridSize[0]+2)*(boxes->gridSize[2]);
-   int size2 = (boxes->gridSize[0]+2)*(boxes->gridSize[1]+2);
-   int maxSize = MAX(size0, size1);
-   maxSize = MAX(size1, size2);
-   hh->bufCapacity = (maxSize)*MAXATOMS*sizeof(ForceMsg);
+    int size0 = (boxes->gridSize[1]) * (boxes->gridSize[2]);
+    int size1 = (boxes->gridSize[0] + 2) * (boxes->gridSize[2]);
+    int size2 = (boxes->gridSize[0] + 2) * (boxes->gridSize[1] + 2);
+    int maxSize = MAX(size0, size1);
+    maxSize = MAX(size1, size2);
+    hh->bufCapacity = (maxSize) * MAXATOMS * sizeof(ForceMsg);
 
-   ForceExchangeParms* parms = comdMalloc(sizeof(ForceExchangeParms));
+    ForceExchangeParms *parms = comdMalloc(sizeof(ForceExchangeParms));
 
-   parms->nCells[HALO_X_MINUS] = (boxes->gridSize[1]  )*(boxes->gridSize[2]  );
-   parms->nCells[HALO_Y_MINUS] = (boxes->gridSize[0]+2)*(boxes->gridSize[2]  );
-   parms->nCells[HALO_Z_MINUS] = (boxes->gridSize[0]+2)*(boxes->gridSize[1]+2);
-   parms->nCells[HALO_X_PLUS]  = parms->nCells[HALO_X_MINUS];
-   parms->nCells[HALO_Y_PLUS]  = parms->nCells[HALO_Y_MINUS];
-   parms->nCells[HALO_Z_PLUS]  = parms->nCells[HALO_Z_MINUS];
+    parms->nCells[HALO_X_MINUS] = (boxes->gridSize[1]) * (boxes->gridSize[2]);
+    parms->nCells[HALO_Y_MINUS] = (boxes->gridSize[0] + 2) * (boxes->gridSize[2]);
+    parms->nCells[HALO_Z_MINUS] = (boxes->gridSize[0] + 2) * (boxes->gridSize[1] + 2);
+    parms->nCells[HALO_X_PLUS] = parms->nCells[HALO_X_MINUS];
+    parms->nCells[HALO_Y_PLUS] = parms->nCells[HALO_Y_MINUS];
+    parms->nCells[HALO_Z_PLUS] = parms->nCells[HALO_Z_MINUS];
 
-   for (int ii=0; ii<6; ++ii)
-   {
-      parms->sendCells[ii] = mkForceSendCellList(boxes, ii, parms->nCells[ii]);
-      parms->recvCells[ii] = mkForceRecvCellList(boxes, ii, parms->nCells[ii]);
-   }
-   
-   hh->parms = parms;
-   return hh;
+    for (int ii = 0; ii < 6; ++ii) {
+        parms->sendCells[ii] = mkForceSendCellList(boxes, ii, parms->nCells[ii]);
+        parms->recvCells[ii] = mkForceRecvCellList(boxes, ii, parms->nCells[ii]);
+    }
+
+    hh->parms = parms;
+    return hh;
 }
 
 void destroyHaloExchange(HaloExchange** haloExchange)
@@ -247,21 +247,30 @@ void haloExchange(HaloExchange* haloExchange, void* data) {
       exchangeData(haloExchange, data, iAxis);
 }
 
+void haloExchange_Producer(HaloExchange* haloExchange, void* data) {
+    for (int iAxis = 0; iAxis < 3; ++iAxis)
+        exchangeData_Producer(haloExchange, data, iAxis);
+}
+
+void haloExchange_Consumer(HaloExchange* haloExchange, void* data) {
+    for (int iAxis = 0; iAxis < 3; ++iAxis)
+        exchangeData_Consumer(haloExchange, data, iAxis);
+}
+
 /// Base class constructor.
-HaloExchange* initHaloExchange(Domain* domain)
-{
-   HaloExchange* hh = comdMalloc(sizeof(HaloExchange));
+HaloExchange* initHaloExchange(Domain* domain) {
+    HaloExchange *hh = comdMalloc(sizeof(HaloExchange));
 
-   // Rank of neighbor task for each face.
-   hh->nbrRank[HALO_X_MINUS] = processorNum(domain, -1,  0,  0);
-   hh->nbrRank[HALO_X_PLUS]  = processorNum(domain, +1,  0,  0);
-   hh->nbrRank[HALO_Y_MINUS] = processorNum(domain,  0, -1,  0);
-   hh->nbrRank[HALO_Y_PLUS]  = processorNum(domain,  0, +1,  0);
-   hh->nbrRank[HALO_Z_MINUS] = processorNum(domain,  0,  0, -1);
-   hh->nbrRank[HALO_Z_PLUS]  = processorNum(domain,  0,  0, +1);
-   hh->bufCapacity = 0; // will be set by sub-class.
+    // Rank of neighbor task for each face.
+    hh->nbrRank[HALO_X_MINUS] = processorNum(domain, -1, 0, 0);
+    hh->nbrRank[HALO_X_PLUS] = processorNum(domain, +1, 0, 0);
+    hh->nbrRank[HALO_Y_MINUS] = processorNum(domain, 0, -1, 0);
+    hh->nbrRank[HALO_Y_PLUS] = processorNum(domain, 0, +1, 0);
+    hh->nbrRank[HALO_Z_MINUS] = processorNum(domain, 0, 0, -1);
+    hh->nbrRank[HALO_Z_PLUS] = processorNum(domain, 0, 0, +1);
+    hh->bufCapacity = 0; // will be set by sub-class.
 
-   return hh;
+    return hh;
 }
 
 /// This is the function that does the heavy lifting for the
@@ -300,6 +309,72 @@ void exchangeData(HaloExchange* haloExchange, void* data, int iAxis) {
    comdFree(recvBufM);
    comdFree(sendBufP);
    comdFree(sendBufM);
+}
+
+void exchangeData_Producer(HaloExchange* haloExchange, void* data, int iAxis) {
+    enum HaloFaceOrder faceM = 2 * iAxis;
+    enum HaloFaceOrder faceP = faceM + 1;
+    RHT_Produce_Secure(faceM);
+    RHT_Produce_Secure(faceP);
+
+    char *sendBufM = comdMalloc(haloExchange->bufCapacity);
+    char *sendBufP = comdMalloc(haloExchange->bufCapacity);
+    char *recvBufM = comdMalloc(haloExchange->bufCapacity);
+    char *recvBufP = comdMalloc(haloExchange->bufCapacity);
+
+    int nSendM = haloExchange->loadBuffer(haloExchange->parms, data, faceM, sendBufM);
+    int nSendP = haloExchange->loadBuffer(haloExchange->parms, data, faceP, sendBufP);
+
+    int nbrRankM = haloExchange->nbrRank[faceM];
+    int nbrRankP = haloExchange->nbrRank[faceP];
+    RHT_Produce_Secure(nbrRankM);
+    RHT_Produce_Secure(nbrRankP);
+
+    int nRecvM, nRecvP;
+
+    startTimer(commHaloTimer);
+    nRecvP = sendReceiveParallel_Producer(sendBufM, nSendM, nbrRankM, recvBufP, haloExchange->bufCapacity, nbrRankP);
+    nRecvM = sendReceiveParallel_Producer(sendBufP, nSendP, nbrRankP, recvBufM, haloExchange->bufCapacity, nbrRankM);
+    stopTimer(commHaloTimer);
+
+    haloExchange->unloadBuffer(haloExchange->parms, data, faceM, nRecvM, recvBufM);
+    haloExchange->unloadBuffer(haloExchange->parms, data, faceP, nRecvP, recvBufP);
+    comdFree(recvBufP);
+    comdFree(recvBufM);
+    comdFree(sendBufP);
+    comdFree(sendBufM);
+}
+
+void exchangeData_Consumer(HaloExchange* haloExchange, void* data, int iAxis) {
+    enum HaloFaceOrder faceM = 2 * iAxis;
+    enum HaloFaceOrder faceP = faceM + 1;
+    RHT_Consume_Check(faceM);
+    RHT_Consume_Check(faceP);
+
+    char *sendBufM = comdMalloc(haloExchange->bufCapacity);
+    char *sendBufP = comdMalloc(haloExchange->bufCapacity);
+    char *recvBufM = comdMalloc(haloExchange->bufCapacity);
+    char *recvBufP = comdMalloc(haloExchange->bufCapacity);
+
+    int nSendM = haloExchange->loadBuffer(haloExchange->parms, data, faceM, sendBufM);
+    int nSendP = haloExchange->loadBuffer(haloExchange->parms, data, faceP, sendBufP);
+
+    int nbrRankM = haloExchange->nbrRank[faceM];
+    int nbrRankP = haloExchange->nbrRank[faceP];
+    RHT_Consume_Check(nbrRankM);
+    RHT_Consume_Check(nbrRankP);
+
+    int nRecvM, nRecvP;
+
+    nRecvP = sendReceiveParallel_Consumer(sendBufM, nSendM, nbrRankM, recvBufP, haloExchange->bufCapacity, nbrRankP);
+    nRecvM = sendReceiveParallel_Consumer(sendBufP, nSendP, nbrRankP, recvBufM, haloExchange->bufCapacity, nbrRankM);
+
+    haloExchange->unloadBuffer(haloExchange->parms, data, faceM, nRecvM, recvBufM);
+    haloExchange->unloadBuffer(haloExchange->parms, data, faceP, nRecvP, recvBufP);
+    comdFree(recvBufP);
+    comdFree(recvBufM);
+    comdFree(sendBufP);
+    comdFree(sendBufM);
 }
 
 /// Make a list of link cells that need to be sent across the specified
@@ -663,7 +738,11 @@ void sortAtomsInCell_Producer(Atoms* atoms, LinkCell* boxes, int iBox) {
         RHT_Produce_Secure(tmp[iTmp].py);
         RHT_Produce_Secure(tmp[iTmp].pz);
     }
+
+    RHT_Produce_Secure(nAtoms);
+    RHT_Produce_Volatile(sizeof(AtomMsg));
     qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
+
     for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
         atoms->gid[ii] = tmp[iTmp].gid;
         atoms->iSpecies[ii] = tmp[iTmp].type;
@@ -711,7 +790,11 @@ void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
         RHT_Consume_Check(tmp[iTmp].py);
         RHT_Consume_Check(tmp[iTmp].pz);
     }
+
+    RHT_Consume_Check(nAtoms);
+    RHT_Consume_Volatile(sizeof(AtomMsg));
     qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
+
     for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
         atoms->gid[ii] = tmp[iTmp].gid;
         atoms->iSpecies[ii] = tmp[iTmp].type;

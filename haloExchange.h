@@ -73,12 +73,16 @@ HaloExchange* initAtomHaloExchange(struct DomainSt* domain, struct LinkCellSt* b
 
 /// Create a HaloExchange for force data.
 HaloExchange* initForceHaloExchange(struct DomainSt* domain, struct LinkCellSt* boxes);
+HaloExchange* initForceHaloExchange_Producer(struct DomainSt* domain, struct LinkCellSt* boxes);
+HaloExchange* initForceHaloExchange_Consumer(struct DomainSt* domain, struct LinkCellSt* boxes);
 
 /// HaloExchange destructor.
 void destroyHaloExchange(HaloExchange** haloExchange);
 
 /// Execute a halo exchange.
 void haloExchange(HaloExchange* haloExchange, void* data);
+void haloExchange_Producer(HaloExchange* haloExchange, void* data);
+void haloExchange_Consumer(HaloExchange* haloExchange, void* data);
 
 /// Sort the atoms by gid in the specified link cell.
 void sortAtomsInCell(struct AtomsSt* atoms, struct LinkCellSt* boxes, int iBox);

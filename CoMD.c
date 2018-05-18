@@ -65,9 +65,7 @@
 #define REDIRECT_OUTPUT 0
 #define   MIN(A,B) ((A) < (B) ? (A) : (B))
 
-static SimFlat* initSimulation(Command cmd);
-static SimFlat* initSimulation_Producer(Command cmd);
-static SimFlat* initSimulation_Consumer(Command cmd);
+static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread);
 
 static void destroySimulation(SimFlat** ps);
 
@@ -75,7 +73,7 @@ static void initSubsystems(void);
 static void finalizeSubsystems(void);
 
 static BasePotential* initPotential(
-   int doeam, const char* potDir, const char* potName, const char* potType);
+   int doeam, const char* potDir, const char* potName, const char* potType, ExecutionThread currentThread);
 static SpeciesData* initSpecies(BasePotential* pot);
 static Validate* initValidate(SimFlat* s);
 static Validate* initValidate_Producer(SimFlat* s);
@@ -215,7 +213,7 @@ int main(int argc, char** argv) {
 double mainExecution(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
-    SimFlat *sim = initSimulation((*cmd));
+    SimFlat *sim = initSimulation((*cmd), NotReplicatedThread);
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
@@ -284,7 +282,7 @@ double mainExecution_producer(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
     //SimFlat *sim = initSimulation_Producer((*cmd));
-    SimFlat *sim = initSimulation((*cmd));
+    SimFlat *sim = initSimulation((*cmd), ProducerThread);
 
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
@@ -364,7 +362,7 @@ void consumer_thread_func(void *args) {
 
     currentThread = ConsumerThread;
 
-    SimFlat *sim = initSimulation((*cmd));
+    SimFlat *sim = initSimulation((*cmd), ConsumerThread);
     //SimFlat *sim = initSimulation_Consumer((*cmd));
 
     //Validate *validate = initValidate_Consumer(sim); // atom counts, energy
@@ -398,7 +396,7 @@ void consumer_thread_func(void *args) {
 /// Initialization order is set by the natural dependencies of the
 /// substructure such as the atoms need the link cells so the link cells
 /// must be initialized before the atoms.
-SimFlat* initSimulation(Command cmd) {
+static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread) {
     SimFlat *sim = comdMalloc(sizeof(SimFlat));
     sim->nSteps = cmd.nSteps;
     sim->printRate = cmd.printRate;
@@ -410,7 +408,7 @@ SimFlat* initSimulation(Command cmd) {
     sim->eKinetic = 0.0;
     sim->atomExchange = NULL;
 
-    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType, currentThread);
     real_t latticeConstant = cmd.lat;
     if (cmd.lat < 0.0)
         latticeConstant = sim->pot->lat;
@@ -454,118 +452,6 @@ SimFlat* initSimulation(Command cmd) {
     return sim;
 }
 
-SimFlat* initSimulation_Producer(Command cmd) {
-    SimFlat *sim = comdMalloc(sizeof(SimFlat));
-    sim->nSteps = cmd.nSteps;
-    sim->printRate = cmd.printRate;
-    sim->dt = cmd.dt;
-    sim->domain = NULL;
-    sim->boxes = NULL;
-    sim->atoms = NULL;
-    sim->ePotential = 0.0;
-    sim->eKinetic = 0.0;
-    sim->atomExchange = NULL;
-
-    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
-    real_t latticeConstant = cmd.lat;
-    if (cmd.lat < 0.0)
-        latticeConstant = sim->pot->lat;
-
-    // ensure input parameters make sense.
-    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
-
-    sim->species = initSpecies(sim->pot);
-
-    real3 globalExtent;
-    globalExtent[0] = cmd.nx * latticeConstant;
-    globalExtent[1] = cmd.ny * latticeConstant;
-    globalExtent[2] = cmd.nz * latticeConstant;
-
-    sim->domain = initDecomposition(
-            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
-
-    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
-    sim->atoms = initAtoms(sim->boxes);
-
-    // create lattice with desired temperature and displacement.
-    createFccLattice_Producer(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
-    setTemperature_Producer(sim, cmd.temperature);
-    randomDisplacements(sim, cmd.initialDelta);
-
-    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
-
-    // Forces must be computed before we call the time stepper.
-    if (printRank())
-        startTimer(redistributeTimer);
-    redistributeAtoms(sim);
-
-    stopTimer(redistributeTimer);
-
-    startTimer(computeForceTimer);
-    computeForce(sim);
-    stopTimer(computeForceTimer);
-
-    kineticEnergy_Producer(sim);
-
-    return sim;
-}
-
-SimFlat* initSimulation_Consumer(Command cmd) {
-    SimFlat *sim = comdMalloc(sizeof(SimFlat));
-    sim->nSteps = cmd.nSteps;
-    sim->printRate = cmd.printRate;
-    sim->dt = cmd.dt;
-    sim->domain = NULL;
-    sim->boxes = NULL;
-    sim->atoms = NULL;
-    sim->ePotential = 0.0;
-    sim->eKinetic = 0.0;
-    sim->atomExchange = NULL;
-
-    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
-    real_t latticeConstant = cmd.lat;
-    if (cmd.lat < 0.0)
-        latticeConstant = sim->pot->lat;
-
-    // ensure input parameters make sense.
-    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
-
-    sim->species = initSpecies(sim->pot);
-
-    real3 globalExtent;
-    globalExtent[0] = cmd.nx * latticeConstant;
-    globalExtent[1] = cmd.ny * latticeConstant;
-    globalExtent[2] = cmd.nz * latticeConstant;
-
-    sim->domain = initDecomposition(
-            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
-
-    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
-    sim->atoms = initAtoms(sim->boxes);
-
-    // create lattice with desired temperature and displacement.
-    createFccLattice_Consumer(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
-    setTemperature_Consumer(sim, cmd.temperature);
-    randomDisplacements(sim, cmd.initialDelta);
-
-    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
-
-    // Forces must be computed before we call the time stepper.
-    if (printRank())
-        startTimer(redistributeTimer);
-    redistributeAtoms(sim);
-
-//    stopTimer(redistributeTimer);
-
-//    startTimer(computeForceTimer);
-    computeForce(sim);
-//    stopTimer(computeForceTimer);
-
-    kineticEnergy_Consumer(sim);
-
-    return sim;
-}
-
 /// frees all data associated with *ps and frees *ps
 void destroySimulation(SimFlat** ps) {
    if (!ps) return;
@@ -602,12 +488,12 @@ void finalizeSubsystems(void) {
 }
 
 /// decide whether to get LJ or EAM potentials
-BasePotential* initPotential(
-   int doeam, const char* potDir, const char* potName, const char* potType) {
+BasePotential* initPotential(int doeam, const char* potDir, const char* potName,
+                             const char* potType, ExecutionThread currentThread) {
     BasePotential *pot = NULL;
 
     if (doeam)
-        pot = initEamPot(potDir, potName, potType);
+        pot = initEamPot(potDir, potName, potType, currentThread);
     else
         pot = initLjPot();
     assert(pot);

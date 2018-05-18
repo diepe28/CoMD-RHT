@@ -14,7 +14,7 @@ typedef struct RankReduceDataSt
    int rank;
 } RankReduceData;
 
-typedef enum { ProducerThread, ConsumerThread } ExecutionThread;
+typedef enum { NotReplicatedThread, ProducerThread, ConsumerThread } ExecutionThread;
 
 extern int myRank;
 extern int nRanks;
@@ -43,6 +43,12 @@ void barrierParallel(void);
 
 /// Wrapper for MPI_Sendrecv.
 int sendReceiveParallel(void* sendBuf, int sendLen, int dest,
+                        void* recvBuf, int recvLen, int source);
+
+int sendReceiveParallel_Producer(void* sendBuf, int sendLen, int dest,
+                        void* recvBuf, int recvLen, int source);
+
+int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
                         void* recvBuf, int recvLen, int source);
 
 /// Wrapper for MPI_Allreduce integer sum.

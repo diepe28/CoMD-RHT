@@ -51,13 +51,12 @@ Domain* initDecomposition(int xproc, int yproc, int zproc, real3 globalExtent) {
 /// (ix+dix, iy+diy, iz+diz) where (ix, iy, iz) are the grid coordinates
 /// of the local rank.  Assumes periodic boundary conditions.  The
 /// deltas cannot be smaller than -procGrid[ii].
-int processorNum(Domain* domain, int dix, int diy, int diz)
-{
-   const int* procCoord = domain->procCoord; // alias
-   const int* procGrid  = domain->procGrid;  // alias
+int processorNum(Domain* domain, int dix, int diy, int diz) {
+   const int *procCoord = domain->procCoord; // alias
+   const int *procGrid = domain->procGrid;  // alias
    int ix = (procCoord[0] + dix + procGrid[0]) % procGrid[0];
    int iy = (procCoord[1] + diy + procGrid[1]) % procGrid[1];
    int iz = (procCoord[2] + diz + procGrid[2]) % procGrid[2];
 
-   return ix + procGrid[0] *(iy + procGrid[1]*iz);
+   return ix + procGrid[0] * (iy + procGrid[1] * iz);
 }

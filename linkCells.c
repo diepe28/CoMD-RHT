@@ -76,6 +76,8 @@
 #define   MAX(A,B) ((A) > (B) ? (A) : (B))
 
 static void copyAtom(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox);
+static void copyAtom_Producer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox);
+static void copyAtom_Consumer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox);
 
 static int getBoxFromCoord(LinkCell* boxes, real_t rr[3]);
 static int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]);
@@ -347,6 +349,58 @@ void moveAtom(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
    return;
 }
 
+void moveAtom_Producer(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
+    int nj = boxes->nAtoms[jBox];
+    RHT_Produce_Secure(nj);
+
+    copyAtom_Producer(boxes, atoms, iId, iBox, nj, jBox);
+    boxes->nAtoms[jBox]++;
+    RHT_Produce_Secure(boxes->nAtoms[jBox]);
+
+    assert(boxes->nAtoms[jBox] < MAXATOMS);
+
+    boxes->nAtoms[iBox]--;
+    RHT_Produce_Secure(boxes->nAtoms[iBox]);
+
+    int ni = boxes->nAtoms[iBox];
+    RHT_Produce_Secure(ni);
+
+    if (ni) copyAtom_Producer(boxes, atoms, ni, iBox, iId, iBox);
+
+    if (jBox > boxes->nLocalBoxes) {
+        --atoms->nLocal;
+        RHT_Produce_Secure(atoms->nLocal);
+    }
+
+    return;
+}
+
+void moveAtom_Consumer(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
+    int nj = boxes->nAtoms[jBox];
+    RHT_Consume_Check(nj);
+
+    copyAtom_Consumer(boxes, atoms, iId, iBox, nj, jBox);
+    boxes->nAtoms[jBox]++;
+    RHT_Consume_Check(boxes->nAtoms[jBox]);
+
+    assert(boxes->nAtoms[jBox] < MAXATOMS);
+
+    boxes->nAtoms[iBox]--;
+    RHT_Consume_Check(boxes->nAtoms[iBox]);
+
+    int ni = boxes->nAtoms[iBox];
+    RHT_Consume_Check(ni);
+
+    if (ni) copyAtom_Consumer(boxes, atoms, ni, iBox, iId, iBox);
+
+    if (jBox > boxes->nLocalBoxes) {
+        --atoms->nLocal;
+        RHT_Consume_Check(atoms->nLocal);
+    }
+
+    return;
+}
+
 /// \details
 /// This is the first step in returning data structures to a consistent
 /// state after the atoms move each time step.  First we discard all
@@ -388,8 +442,7 @@ void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
         while (ii < boxes->nAtoms[iBox]) {
             int jBox = getBoxFromCoord_Producer(boxes, atoms->r[iOff + ii]);
             if (jBox != iBox)
-                // TODO, move atom probably needs volatiles checks
-                moveAtom(boxes, atoms, ii, iBox, jBox);
+                moveAtom_Producer(boxes, atoms, ii, iBox, jBox);
             else
                 ++ii;
         }
@@ -408,8 +461,7 @@ void updateLinkCells_Consumer(LinkCell* boxes, Atoms* atoms) {
         while (ii < boxes->nAtoms[iBox]) {
             int jBox = getBoxFromCoord_Consumer(boxes, atoms->r[iOff + ii]);
             if (jBox != iBox)
-                // TODO, move atom probably needs volatiles checks
-                moveAtom(boxes, atoms, ii, iBox, jBox);
+                moveAtom_Consumer(boxes, atoms, ii, iBox, jBox);
             else
                 ++ii;
         }
@@ -440,6 +492,40 @@ void copyAtom(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int
     const int jOff = MAXATOMS * jBox + jAtom;
     atoms->gid[jOff] = atoms->gid[iOff];
     atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
+    memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
+    memcpy(atoms->p[jOff], atoms->p[iOff], sizeof(real3));
+    memcpy(atoms->f[jOff], atoms->f[iOff], sizeof(real3));
+    memcpy(atoms->U + jOff, atoms->U + iOff, sizeof(real_t));
+}
+
+void copyAtom_Producer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox) {
+    const int iOff = MAXATOMS * iBox + iAtom;
+    const int jOff = MAXATOMS * jBox + jAtom;
+    atoms->gid[jOff] = atoms->gid[iOff];
+    atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
+
+    RHT_Produce_Secure(iOff);
+    RHT_Produce_Secure(jOff);
+    RHT_Produce_Secure(atoms->gid[jOff]);
+    RHT_Produce_Volatile(atoms->iSpecies[jOff]);
+
+    memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
+    memcpy(atoms->p[jOff], atoms->p[iOff], sizeof(real3));
+    memcpy(atoms->f[jOff], atoms->f[iOff], sizeof(real3));
+    memcpy(atoms->U + jOff, atoms->U + iOff, sizeof(real_t));
+}
+
+void copyAtom_Consumer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox) {
+    const int iOff = MAXATOMS * iBox + iAtom;
+    const int jOff = MAXATOMS * jBox + jAtom;
+    atoms->gid[jOff] = atoms->gid[iOff];
+    atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
+
+    RHT_Consume_Check(iOff);
+    RHT_Consume_Check(jOff);
+    RHT_Consume_Check(atoms->gid[jOff]);
+    RHT_Consume_Volatile(atoms->iSpecies[jOff]);
+
     memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
     memcpy(atoms->p[jOff], atoms->p[iOff], sizeof(real3));
     memcpy(atoms->f[jOff], atoms->f[iOff], sizeof(real3));

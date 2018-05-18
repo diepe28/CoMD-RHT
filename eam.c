@@ -104,6 +104,10 @@
 
 // EAM functionality
 static int eamForce(SimFlat* s);
+static int eamForce_Producer(SimFlat* s);
+static int eamForce_Consumer(SimFlat* s);
+
+
 static void eamPrint(FILE* file, BasePotential* pot);
 static void eamDestroy(BasePotential** pot); 
 static void eamBcastPotential(EamPotential* pot);
@@ -131,35 +135,47 @@ static void typeNotSupported(const char* callSite, const char* type);
 /// \param [in] dir   The directory in which potential table files are found.
 /// \param [in] file  The name of the potential table file.
 /// \param [in] type  The file format of the potential file (setfl or funcfl).
-BasePotential* initEamPot(const char* dir, const char* file, const char* type) {
-   EamPotential *pot = comdMalloc(sizeof(EamPotential));
-   assert(pot);
-   pot->force = eamForce;
-   pot->print = eamPrint;
-   pot->destroy = eamDestroy;
-   pot->phi = NULL;
-   pot->rho = NULL;
-   pot->f = NULL;
+struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type, ExecutionThread currentThread) {
+    EamPotential *pot = comdMalloc(sizeof(EamPotential));
+    assert(pot);
 
-   // Initialization of the next three items requires information about
-   // the parallel decomposition and link cells that isn't available
-   // with the potential is initialized.  Hence, we defer their
-   // initialization until the first time we call the force routine.
-   pot->dfEmbed = NULL;
-   pot->rhobar = NULL;
-   pot->forceExchange = NULL;
+    switch (currentThread){
+        case NotReplicatedThread:
+            pot->force = eamForce;
+            break;
+        case ProducerThread:
+            pot->force = eamForce_Producer;
+            break;
+        case ConsumerThread:
+            pot->force = eamForce_Consumer;
+            break;
+    }
 
-   if (getMyRank() == 0) {
-      if (strcmp(type, "setfl") == 0)
-         eamReadSetfl(pot, dir, file);
-      else if (strcmp(type, "funcfl") == 0)
-         eamReadFuncfl(pot, dir, file);
-      else
-         typeNotSupported("initEamPot", type);
-   }
-   eamBcastPotential(pot);
+    pot->print = eamPrint;
+    pot->destroy = eamDestroy;
+    pot->phi = NULL;
+    pot->rho = NULL;
+    pot->f = NULL;
 
-   return (BasePotential *) pot;
+    // Initialization of the next three items requires information about
+    // the parallel decomposition and link cells that isn't available
+    // with the potential is initialized.  Hence, we defer their
+    // initialization until the first time we call the force routine.
+    pot->dfEmbed = NULL;
+    pot->rhobar = NULL;
+    pot->forceExchange = NULL;
+
+    if (getMyRank() == 0) {
+        if (strcmp(type, "setfl") == 0)
+            eamReadSetfl(pot, dir, file);
+        else if (strcmp(type, "funcfl") == 0)
+            eamReadFuncfl(pot, dir, file);
+        else
+            typeNotSupported("initEamPot", type);
+    }
+    eamBcastPotential(pot);
+
+    return (BasePotential *) pot;
 }
 
 /// Calculate potential energy and forces for the EAM potential.
@@ -173,166 +189,473 @@ BasePotential* initEamPot(const char* dir, const char* file, const char* type) {
 ///   -# Loop over all atoms and their neighbors, compute the embedding
 ///   energy contribution to the force and add to the two-body force
 /// 
-int eamForce(SimFlat* s)
-{
-   EamPotential* pot = (EamPotential*) s->pot;
-   assert(pot);
+int eamForce(SimFlat* s) {
+    EamPotential *pot = (EamPotential *) s->pot;
+    assert(pot);
 
-   // set up halo exchange and internal storage on first call to forces.
-   if (pot->forceExchange == NULL)
-   {
-      int maxTotalAtoms = MAXATOMS*s->boxes->nTotalBoxes;
-      pot->dfEmbed = comdMalloc(maxTotalAtoms*sizeof(real_t));
-      pot->rhobar  = comdMalloc(maxTotalAtoms*sizeof(real_t));
-      pot->forceExchange = initForceHaloExchange(s->domain, s->boxes);
-      pot->forceExchangeData = comdMalloc(sizeof(ForceExchangeData));
-      pot->forceExchangeData->dfEmbed = pot->dfEmbed;
-      pot->forceExchangeData->boxes = s->boxes;
-   }
-   
-   real_t rCut2 = pot->cutoff*pot->cutoff;
+    // set up halo exchange and internal storage on first call to forces.
+    if (pot->forceExchange == NULL) {
+        int maxTotalAtoms = MAXATOMS * s->boxes->nTotalBoxes;
+        pot->dfEmbed = comdMalloc(maxTotalAtoms * sizeof(real_t));
+        pot->rhobar = comdMalloc(maxTotalAtoms * sizeof(real_t));
+        pot->forceExchange = initForceHaloExchange(s->domain, s->boxes);
+        pot->forceExchangeData = comdMalloc(sizeof(ForceExchangeData));
+        pot->forceExchangeData->dfEmbed = pot->dfEmbed;
+        pot->forceExchangeData->boxes = s->boxes;
+    }
 
-   // zero forces / energy / rho /rhoprime
-   real_t etot = 0.0;
-   memset(s->atoms->f,  0, s->boxes->nTotalBoxes*MAXATOMS*sizeof(real3));
-   memset(s->atoms->U,  0, s->boxes->nTotalBoxes*MAXATOMS*sizeof(real_t));
-   memset(pot->dfEmbed, 0, s->boxes->nTotalBoxes*MAXATOMS*sizeof(real_t));
-   memset(pot->rhobar,  0, s->boxes->nTotalBoxes*MAXATOMS*sizeof(real_t));
+    real_t rCut2 = pot->cutoff * pot->cutoff;
 
-   int nbrBoxes[27];
-   // loop over local boxes
-   for (int iBox=0; iBox<s->boxes->nLocalBoxes; iBox++)
-   {
-      int nIBox = s->boxes->nAtoms[iBox];
-      int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
-      // loop over neighbor boxes of iBox (some may be halo boxes)
-      for (int jTmp=0; jTmp<nNbrBoxes; jTmp++)
-      {
-         int jBox = nbrBoxes[jTmp];
-         if (jBox < iBox ) continue;
+    // zero forces / energy / rho /rhoprime
+    real_t etot = 0.0;
+    memset(s->atoms->f, 0, s->boxes->nTotalBoxes * MAXATOMS * sizeof(real3));
+    memset(s->atoms->U, 0, s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t));
+    memset(pot->dfEmbed, 0, s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t));
+    memset(pot->rhobar, 0, s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t));
 
-         int nJBox = s->boxes->nAtoms[jBox];
-         // loop over atoms in iBox
-         for (int iOff=MAXATOMS*iBox,ii=0; ii<nIBox; ii++,iOff++)
-         {
-            // loop over atoms in jBox
-            for (int jOff=MAXATOMS*jBox,ij=0; ij<nJBox; ij++,jOff++)
-            {
-               if ( (iBox==jBox) &&(ij <= ii) ) continue;
+    int nbrBoxes[27];
+    // loop over local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int nIBox = s->boxes->nAtoms[iBox];
+        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        // loop over neighbor boxes of iBox (some may be halo boxes)
+        for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
+            int jBox = nbrBoxes[jTmp];
+            if (jBox < iBox) continue;
 
-               double r2 = 0.0;
-               real3 dr;
-               for (int k=0; k<3; k++)
-               {
-                  dr[k]=s->atoms->r[iOff][k]-s->atoms->r[jOff][k];
-                  r2+=dr[k]*dr[k];
-               }
-               if(r2>rCut2) continue;
+            int nJBox = s->boxes->nAtoms[jBox];
+            // loop over atoms in iBox
+            for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+                // loop over atoms in jBox
+                for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
+                    if ((iBox == jBox) && (ij <= ii)) continue;
 
-               double r = sqrt(r2);
+                    double r2 = 0.0;
+                    real3 dr;
+                    for (int k = 0; k < 3; k++) {
+                        dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        r2 += dr[k] * dr[k];
+                    }
+                    if (r2 > rCut2) continue;
 
-               real_t phiTmp, dPhi, rhoTmp, dRho;
-               interpolate(pot->phi, r, &phiTmp, &dPhi);
-               interpolate(pot->rho, r, &rhoTmp, &dRho);
+                    double r = sqrt(r2);
 
-               for (int k=0; k<3; k++)
-               {
-                  s->atoms->f[iOff][k] -= dPhi*dr[k]/r;
-                  s->atoms->f[jOff][k] += dPhi*dr[k]/r;
-               }
+                    real_t phiTmp, dPhi, rhoTmp, dRho;
+                    interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    interpolate(pot->rho, r, &rhoTmp, &dRho);
 
-               // update energy terms
-               // calculate energy contribution based on whether
-               // the neighbor box is local or remote
-               if (jBox < s->boxes->nLocalBoxes)
-                  etot += phiTmp;
-               else
-                  etot += 0.5*phiTmp;
+                    for (int k = 0; k < 3; k++) {
+                        s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
+                        s->atoms->f[jOff][k] += dPhi * dr[k] / r;
+                    }
 
-               s->atoms->U[iOff] += 0.5*phiTmp;
-               s->atoms->U[jOff] += 0.5*phiTmp;
+                    // update energy terms
+                    // calculate energy contribution based on whether
+                    // the neighbor box is local or remote
+                    if (jBox < s->boxes->nLocalBoxes)
+                        etot += phiTmp;
+                    else
+                        etot += 0.5 * phiTmp;
 
-               // accumulate rhobar for each atom
-               pot->rhobar[iOff] += rhoTmp;
-               pot->rhobar[jOff] += rhoTmp;
+                    s->atoms->U[iOff] += 0.5 * phiTmp;
+                    s->atoms->U[jOff] += 0.5 * phiTmp;
 
-            } // loop over atoms in jBox
-         } // loop over atoms in iBox
-      } // loop over neighbor boxes
-   } // loop over local boxes
+                    // accumulate rhobar for each atom
+                    pot->rhobar[iOff] += rhoTmp;
+                    pot->rhobar[jOff] += rhoTmp;
 
-   // Compute Embedding Energy
-   // loop over all local boxes
-   for (int iBox=0; iBox<s->boxes->nLocalBoxes; iBox++)
-   {
-      int iOff;
-      int nIBox =  s->boxes->nAtoms[iBox];
+                } // loop over atoms in jBox
+            } // loop over atoms in iBox
+        } // loop over neighbor boxes
+    } // loop over local boxes
 
-      // loop over atoms in iBox
-      for (int iOff=MAXATOMS*iBox,ii=0; ii<nIBox; ii++,iOff++)
-      {
-         real_t fEmbed, dfEmbed;
-         interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
-         pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
-         etot += fEmbed; 
-         s->atoms->U[iOff] += fEmbed;
-      }
-   }
+    // Compute Embedding Energy
+    // loop over all local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int iOff;
+        int nIBox = s->boxes->nAtoms[iBox];
 
-   // exchange derivative of the embedding energy with repsect to rhobar
-   startTimer(eamHaloTimer);
-   haloExchange(pot->forceExchange, pot->forceExchangeData);
-   stopTimer(eamHaloTimer);
+        // loop over atoms in iBox
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+            real_t fEmbed, dfEmbed;
+            interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
+            pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
+            etot += fEmbed;
+            s->atoms->U[iOff] += fEmbed;
+        }
+    }
 
-   // third pass
-   // loop over local boxes
-   for (int iBox=0; iBox<s->boxes->nLocalBoxes; iBox++)
-   {
-      int nIBox =  s->boxes->nAtoms[iBox];
-      int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
-      // loop over neighbor boxes of iBox (some may be halo boxes)
-      for (int jTmp=0; jTmp<nNbrBoxes; jTmp++)
-      {
-         int jBox = nbrBoxes[jTmp];
-         if(jBox < iBox) continue;
+    // exchange derivative of the embedding energy with repsect to rhobar
+    startTimer(eamHaloTimer);
+    haloExchange(pot->forceExchange, pot->forceExchangeData);
+    stopTimer(eamHaloTimer);
 
-         int nJBox = s->boxes->nAtoms[jBox];
-         // loop over atoms in iBox
-         for (int iOff=MAXATOMS*iBox,ii=0; ii<nIBox; ii++,iOff++)
-         {
-            // loop over atoms in jBox
-            for (int jOff=MAXATOMS*jBox,ij=0; ij<nJBox; ij++,jOff++)
-            { 
-               if ((iBox==jBox) && (ij <= ii))  continue;
+    // third pass
+    // loop over local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int nIBox = s->boxes->nAtoms[iBox];
+        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        // loop over neighbor boxes of iBox (some may be halo boxes)
+        for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
+            int jBox = nbrBoxes[jTmp];
+            if (jBox < iBox) continue;
 
-               double r2 = 0.0;
-               real3 dr;
-               for (int k=0; k<3; k++)
-               {
-                  dr[k]=s->atoms->r[iOff][k]-s->atoms->r[jOff][k];
-                  r2+=dr[k]*dr[k];
-               }
-               if(r2>=rCut2) continue;
+            int nJBox = s->boxes->nAtoms[jBox];
+            // loop over atoms in iBox
+            for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+                // loop over atoms in jBox
+                for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
+                    if ((iBox == jBox) && (ij <= ii)) continue;
 
-               real_t r = sqrt(r2);
+                    double r2 = 0.0;
+                    real3 dr;
+                    for (int k = 0; k < 3; k++) {
+                        dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        r2 += dr[k] * dr[k];
+                    }
+                    if (r2 >= rCut2) continue;
 
-               real_t rhoTmp, dRho;
-               interpolate(pot->rho, r, &rhoTmp, &dRho);
+                    real_t r = sqrt(r2);
 
-               for (int k=0; k<3; k++)
-               {
-                  s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff]+pot->dfEmbed[jOff])*dRho*dr[k]/r;
-                  s->atoms->f[jOff][k] += (pot->dfEmbed[iOff]+pot->dfEmbed[jOff])*dRho*dr[k]/r;
-               }
+                    real_t rhoTmp, dRho;
+                    interpolate(pot->rho, r, &rhoTmp, &dRho);
 
-            } // loop over atoms in jBox
-         } // loop over atoms in iBox
-      } // loop over neighbor boxes
-   } // loop over local boxes
+                    for (int k = 0; k < 3; k++) {
+                        s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                        s->atoms->f[jOff][k] += (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                    }
 
-   s->ePotential = (real_t) etot;
+                } // loop over atoms in jBox
+            } // loop over atoms in iBox
+        } // loop over neighbor boxes
+    } // loop over local boxes
 
-   return 0;
+    s->ePotential = (real_t) etot;
+
+    return 0;
+}
+
+int eamForce_Producer(SimFlat* s) {
+    EamPotential *pot = (EamPotential *) s->pot;
+    assert(pot);
+
+    // set up halo exchange and internal storage on first call to forces.
+    if (pot->forceExchange == NULL) {
+        int maxTotalAtoms = MAXATOMS * s->boxes->nTotalBoxes;
+        RHT_Produce_Secure(maxTotalAtoms);
+
+        pot->dfEmbed = comdMalloc(maxTotalAtoms * sizeof(real_t));
+        pot->rhobar = comdMalloc(maxTotalAtoms * sizeof(real_t));
+
+        // TODO, not sure if must be replicated because we need a new structure, new memory
+        pot->forceExchange = initForceHaloExchange(s->domain, s->boxes);
+        pot->forceExchangeData = comdMalloc(sizeof(ForceExchangeData));
+
+        pot->forceExchangeData->dfEmbed = pot->dfEmbed;
+        pot->forceExchangeData->boxes = s->boxes;
+    }
+
+    real_t rCut2 = pot->cutoff * pot->cutoff;
+    RHT_Produce_Secure(rCut2);
+
+    // zero forces / energy / rho /rhoprime
+    real_t etot = 0.0;
+    RHT_Produce_Secure(etot);
+
+    size_t size1 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real3);
+    size_t size2 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+    size_t size3 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+    size_t size4 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+    RHT_Produce_Secure(size1);
+    RHT_Produce_Secure(size2);
+    RHT_Produce_Secure(size3);
+    RHT_Produce_Volatile(size3);
+
+    memset(s->atoms->f, 0, size1);
+    memset(s->atoms->U, 0, size2);
+    memset(pot->dfEmbed, 0, size3);
+    memset(pot->rhobar, 0, size4);
+
+    int nbrBoxes[27];
+    // loop over local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int nIBox = s->boxes->nAtoms[iBox];
+        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        // loop over neighbor boxes of iBox (some may be halo boxes)
+        for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
+            int jBox = nbrBoxes[jTmp];
+            if (jBox < iBox) continue;
+
+            int nJBox = s->boxes->nAtoms[jBox];
+            // loop over atoms in iBox
+            for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+                // loop over atoms in jBox
+                for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
+                    if ((iBox == jBox) && (ij <= ii)) continue;
+
+                    double r2 = 0.0;
+                    real3 dr;
+                    for (int k = 0; k < 3; k++) {
+                        dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        r2 += dr[k] * dr[k];
+                    }
+                    if (r2 > rCut2) continue;
+
+                    double r = sqrt(r2);
+
+                    real_t phiTmp, dPhi, rhoTmp, dRho;
+                    interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+
+                    for (int k = 0; k < 3; k++) {
+                        s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
+                        s->atoms->f[jOff][k] += dPhi * dr[k] / r;
+                    }
+
+                    // update energy terms
+                    // calculate energy contribution based on whether
+                    // the neighbor box is local or remote
+                    if (jBox < s->boxes->nLocalBoxes)
+                        etot += phiTmp;
+                    else
+                        etot += 0.5 * phiTmp;
+
+                    s->atoms->U[iOff] += 0.5 * phiTmp;
+                    s->atoms->U[jOff] += 0.5 * phiTmp;
+
+                    // accumulate rhobar for each atom
+                    pot->rhobar[iOff] += rhoTmp;
+                    pot->rhobar[jOff] += rhoTmp;
+
+                } // loop over atoms in jBox
+            } // loop over atoms in iBox
+        } // loop over neighbor boxes
+    } // loop over local boxes
+
+    // Compute Embedding Energy
+    // loop over all local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int iOff;
+        int nIBox = s->boxes->nAtoms[iBox];
+
+        // loop over atoms in iBox
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+            real_t fEmbed, dfEmbed;
+            interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
+            pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
+            etot += fEmbed;
+            s->atoms->U[iOff] += fEmbed;
+        }
+    }
+
+    // exchange derivative of the embedding energy with repsect to rhobar
+    startTimer(eamHaloTimer);
+    haloExchange(pot->forceExchange, pot->forceExchangeData);
+    stopTimer(eamHaloTimer);
+
+    // third pass
+    // loop over local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int nIBox = s->boxes->nAtoms[iBox];
+        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        // loop over neighbor boxes of iBox (some may be halo boxes)
+        for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
+            int jBox = nbrBoxes[jTmp];
+            if (jBox < iBox) continue;
+
+            int nJBox = s->boxes->nAtoms[jBox];
+            // loop over atoms in iBox
+            for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+                // loop over atoms in jBox
+                for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
+                    if ((iBox == jBox) && (ij <= ii)) continue;
+
+                    double r2 = 0.0;
+                    real3 dr;
+                    for (int k = 0; k < 3; k++) {
+                        dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        r2 += dr[k] * dr[k];
+                    }
+                    if (r2 >= rCut2) continue;
+
+                    real_t r = sqrt(r2);
+
+                    real_t rhoTmp, dRho;
+                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+
+                    for (int k = 0; k < 3; k++) {
+                        s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                        s->atoms->f[jOff][k] += (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                    }
+
+                } // loop over atoms in jBox
+            } // loop over atoms in iBox
+        } // loop over neighbor boxes
+    } // loop over local boxes
+
+    s->ePotential = (real_t) etot;
+
+    return 0;
+}
+
+int eamForce_Consumer(SimFlat* s) {
+    EamPotential *pot = (EamPotential *) s->pot;
+    assert(pot);
+
+    // set up halo exchange and internal storage on first call to forces.
+    if (pot->forceExchange == NULL) {
+        int maxTotalAtoms = MAXATOMS * s->boxes->nTotalBoxes;
+        RHT_Consume_Check(maxTotalAtoms);
+
+        pot->dfEmbed = comdMalloc(maxTotalAtoms * sizeof(real_t));
+        pot->rhobar = comdMalloc(maxTotalAtoms * sizeof(real_t));
+        pot->forceExchange = initForceHaloExchange(s->domain, s->boxes);
+        pot->forceExchangeData = comdMalloc(sizeof(ForceExchangeData));
+        pot->forceExchangeData->dfEmbed = pot->dfEmbed;
+        pot->forceExchangeData->boxes = s->boxes;
+    }
+
+    real_t rCut2 = pot->cutoff * pot->cutoff;
+    RHT_Consume_Check(rCut2);
+
+    // zero forces / energy / rho /rhoprime
+    real_t etot = 0.0;
+    RHT_Consume_Check(etot);
+
+    size_t size1 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real3);
+    size_t size2 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+    size_t size3 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+    size_t size4 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+    RHT_Consume_Check(size1);
+    RHT_Consume_Check(size2);
+    RHT_Consume_Check(size3);
+    RHT_Consume_Volatile(size3);
+
+    memset(s->atoms->f, 0, size1);
+    memset(s->atoms->U, 0, size2);
+    memset(pot->dfEmbed, 0, size3);
+    memset(pot->rhobar, 0, size4);
+
+    int nbrBoxes[27];
+    // loop over local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int nIBox = s->boxes->nAtoms[iBox];
+        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        // loop over neighbor boxes of iBox (some may be halo boxes)
+        for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
+            int jBox = nbrBoxes[jTmp];
+            if (jBox < iBox) continue;
+
+            int nJBox = s->boxes->nAtoms[jBox];
+            // loop over atoms in iBox
+            for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+                // loop over atoms in jBox
+                for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
+                    if ((iBox == jBox) && (ij <= ii)) continue;
+
+                    double r2 = 0.0;
+                    real3 dr;
+                    for (int k = 0; k < 3; k++) {
+                        dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        r2 += dr[k] * dr[k];
+                    }
+                    if (r2 > rCut2) continue;
+
+                    double r = sqrt(r2);
+
+                    real_t phiTmp, dPhi, rhoTmp, dRho;
+                    interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+
+                    for (int k = 0; k < 3; k++) {
+                        s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
+                        s->atoms->f[jOff][k] += dPhi * dr[k] / r;
+                    }
+
+                    // update energy terms
+                    // calculate energy contribution based on whether
+                    // the neighbor box is local or remote
+                    if (jBox < s->boxes->nLocalBoxes)
+                        etot += phiTmp;
+                    else
+                        etot += 0.5 * phiTmp;
+
+                    s->atoms->U[iOff] += 0.5 * phiTmp;
+                    s->atoms->U[jOff] += 0.5 * phiTmp;
+
+                    // accumulate rhobar for each atom
+                    pot->rhobar[iOff] += rhoTmp;
+                    pot->rhobar[jOff] += rhoTmp;
+
+                } // loop over atoms in jBox
+            } // loop over atoms in iBox
+        } // loop over neighbor boxes
+    } // loop over local boxes
+
+    // Compute Embedding Energy
+    // loop over all local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int iOff;
+        int nIBox = s->boxes->nAtoms[iBox];
+
+        // loop over atoms in iBox
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+            real_t fEmbed, dfEmbed;
+            interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
+            pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
+            etot += fEmbed;
+            s->atoms->U[iOff] += fEmbed;
+        }
+    }
+
+    // exchange derivative of the embedding energy with repsect to rhobar
+    startTimer(eamHaloTimer);
+    haloExchange(pot->forceExchange, pot->forceExchangeData);
+    stopTimer(eamHaloTimer);
+
+    // third pass
+    // loop over local boxes
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        int nIBox = s->boxes->nAtoms[iBox];
+        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        // loop over neighbor boxes of iBox (some may be halo boxes)
+        for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
+            int jBox = nbrBoxes[jTmp];
+            if (jBox < iBox) continue;
+
+            int nJBox = s->boxes->nAtoms[jBox];
+            // loop over atoms in iBox
+            for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
+                // loop over atoms in jBox
+                for (int jOff = MAXATOMS * jBox, ij = 0; ij < nJBox; ij++, jOff++) {
+                    if ((iBox == jBox) && (ij <= ii)) continue;
+
+                    double r2 = 0.0;
+                    real3 dr;
+                    for (int k = 0; k < 3; k++) {
+                        dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        r2 += dr[k] * dr[k];
+                    }
+                    if (r2 >= rCut2) continue;
+
+                    real_t r = sqrt(r2);
+
+                    real_t rhoTmp, dRho;
+                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+
+                    for (int k = 0; k < 3; k++) {
+                        s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                        s->atoms->f[jOff][k] += (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                    }
+
+                } // loop over atoms in jBox
+            } // loop over atoms in iBox
+        } // loop over neighbor boxes
+    } // loop over local boxes
+
+    s->ePotential = (real_t) etot;
+
+    return 0;
 }
 
 void eamPrint(FILE* file, BasePotential* pot)
@@ -470,28 +793,26 @@ void destroyInterpolationObject(InterpolationObject** a)
 /// \param [in] r Point where function value is needed.
 /// \param [out] f The interpolated value of f(r).
 /// \param [out] df The interpolated value of df(r)/dr.
-void interpolate(InterpolationObject* table, real_t r, real_t* f, real_t* df)
-{
-   const real_t* tt = table->values; // alias
-   
-   if ( r < table->x0 ) r = table->x0;
+void interpolate(InterpolationObject* table, real_t r, real_t* f, real_t* df) {
+    const real_t *tt = table->values; // alias
 
-   r = (r-table->x0)*(table->invDx) ;
-   int ii = (int)floor(r);
-   if (ii > table->n)
-   {
-      ii = table->n;
-      r = table->n / table->invDx;
-   }
-   // reset r to fractional distance
-   r = r - floor(r);
+    if (r < table->x0) r = table->x0;
 
-   real_t g1 = tt[ii+1] - tt[ii-1];
-   real_t g2 = tt[ii+2] - tt[ii];
+    r = (r - table->x0) * (table->invDx);
+    int ii = (int) floor(r);
+    if (ii > table->n) {
+        ii = table->n;
+        r = table->n / table->invDx;
+    }
+    // reset r to fractional distance
+    r = r - floor(r);
 
-   *f = tt[ii] + 0.5*r*(g1 + r*(tt[ii+1] + tt[ii-1] - 2.0*tt[ii]) );
+    real_t g1 = tt[ii + 1] - tt[ii - 1];
+    real_t g2 = tt[ii + 2] - tt[ii];
 
-   *df = 0.5*(g1 + r*(g2-g1))*table->invDx;
+    *f = tt[ii] + 0.5 * r * (g1 + r * (tt[ii + 1] + tt[ii - 1] - 2.0 * tt[ii]));
+
+    *df = 0.5 * (g1 + r * (g2 - g1)) * table->invDx;
 }
 
 /// Broadcasts an InterpolationObject from rank 0 to all other ranks.

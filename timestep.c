@@ -126,8 +126,10 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop patter with multiple values to produce
     // We can have the values as the last values of the macro to have a arg list separated by comma
     // and we can send the number of values to replicate in order to use the info for the var grouping
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
     globalQueue.enqIt = 0;
     groupVarProducer = 0.0;
+#endif
 
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
@@ -162,8 +164,10 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advanceVelocity_Consumer(SimFlat* s, int nBoxes, real_t dt) {
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
     globalQueue.deqIt = 0;
     groupVarConsumer = 0.0;
+#endif
 
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
@@ -210,8 +214,10 @@ void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
 
 void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop pattern with multiple values to produce, same as before
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
     globalQueue.enqIt = 0;
     groupVarProducer = 0.0;
+#endif
 
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
@@ -248,8 +254,10 @@ void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
 
 void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop pattern with multiple values to produce, same as before
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
     globalQueue.deqIt = 0;
     groupVarConsumer = 0.0;
+#endif
 
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
@@ -397,7 +405,7 @@ void redistributeAtoms_Producer(SimFlat* sim) {
     startTimer(atomHaloTimer);
     // TODO, a lot of memcpys that need to be validated (but what to validate?
     // the mem address will be different in the replica, maybe just the size of mem to be copied)
-    haloExchange(sim->atomExchange, sim);
+    haloExchange_Producer(sim->atomExchange, sim);
     stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
@@ -409,7 +417,7 @@ void redistributeAtoms_Consumer(SimFlat* sim) {
     updateLinkCells_Consumer(sim->boxes, sim->atoms);
 
     startTimer(atomHaloTimer);
-    haloExchange(sim->atomExchange, sim);
+    haloExchange_Consumer(sim->atomExchange, sim);
     stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)

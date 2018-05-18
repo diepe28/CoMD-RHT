@@ -6,6 +6,7 @@
 
 #include "mytype.h"
 #include "CoMDTypes.h"
+#include "parallel.h"
 
 struct BasePotentialSt;
 struct LinkCellSt;
@@ -57,5 +58,5 @@ typedef struct EamPotentialSt
    ForceExchangeData* forceExchangeData;
 } EamPotential;
 
-struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type);
+struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type, ExecutionThread currentThread);
 #endif

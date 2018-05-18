@@ -106,6 +106,46 @@ int sendReceiveParallel(void* sendBuf, int sendLen, int dest,
 #endif
 }
 
+int sendReceiveParallel_Producer(void* sendBuf, int sendLen, int dest,
+                        void* recvBuf, int recvLen, int source) {
+#ifdef DO_MPI
+    int bytesReceived;
+    MPI_Status status;
+    MPI_Sendrecv(sendBuf, sendLen, MPI_BYTE, dest, 0,
+                 recvBuf, recvLen, MPI_BYTE, source, 0,
+                 MPI_COMM_WORLD, &status);
+    MPI_Get_count(&status, MPI_BYTE, &bytesReceived);
+
+    return bytesReceived;
+#else
+    assert(source == dest);
+    RHT_Produce_Volatile(sendLen);
+    memcpy(recvBuf, sendBuf, sendLen);
+
+    return sendLen;
+#endif
+}
+
+int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
+                        void* recvBuf, int recvLen, int source) {
+#ifdef DO_MPI
+    int bytesReceived;
+    MPI_Status status;
+    MPI_Sendrecv(sendBuf, sendLen, MPI_BYTE, dest, 0,
+                 recvBuf, recvLen, MPI_BYTE, source, 0,
+                 MPI_COMM_WORLD, &status);
+    MPI_Get_count(&status, MPI_BYTE, &bytesReceived);
+
+    return bytesReceived;
+#else
+    assert(source == dest);
+    RHT_Consume_Volatile(sendLen);
+    memcpy(recvBuf, sendBuf, sendLen);
+
+    return sendLen;
+#endif
+}
+
 void addIntParallel(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);

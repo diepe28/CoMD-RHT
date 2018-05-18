@@ -43,6 +43,8 @@ int getBoxFromTuple_Consumer(LinkCell* boxes, int x, int y, int z);
 
 
 void moveAtom(LinkCell* boxes, struct AtomsSt* atoms, int iId, int iBox, int jBox);
+void moveAtom_Producer(LinkCell* boxes, struct AtomsSt* atoms, int iId, int iBox, int jBox);
+void moveAtom_Consumer(LinkCell* boxes, struct AtomsSt* atoms, int iId, int iBox, int jBox);
 
 /// Update link cell data structures when the atoms have moved.
 void updateLinkCells(LinkCell* boxes, struct AtomsSt* atoms);
