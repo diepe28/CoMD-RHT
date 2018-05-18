@@ -32,9 +32,11 @@
 
 typedef struct {
     volatile int deqPtr;
-    double padding0[CACHE_LINE_SIZE - sizeof(int)];
+    int deqIt;
+    double padding0[CACHE_LINE_SIZE - sizeof(int) * 2];
     volatile int enqPtr;
-    double padding1[CACHE_LINE_SIZE - sizeof(int)];
+    int enqIt;
+    double padding1[CACHE_LINE_SIZE - sizeof(int) * 2];
     volatile double *content;
     double padding2[CACHE_LINE_SIZE - sizeof(double *)];
     volatile double volatileValue;
@@ -71,11 +73,13 @@ extern double wait_calc;
 extern RHT_QUEUE globalQueue;
 extern SRMT_QUEUE srmtQueue;
 
+// TODO, do this variables need to be in a different cache line than the next 3?? I think yes
 extern double groupVarProducer;
-extern double groupVarConsumer;
-extern int groupIncompleteConsumer;
 extern int groupIncompleteProducer;
 extern __thread long iterCountProducer;
+
+extern double groupVarConsumer;
+extern int groupIncompleteConsumer;
 extern __thread long iterCountConsumer;
 
 static pthread_t **consumerThreads;
@@ -110,7 +114,6 @@ static int are_both_nan(double pValue, double cValue){
     waitValue = (globalQueue.enqPtr >= globalQueue.localDeq ?                   \
                 RHT_QUEUE_SIZE - globalQueue.enqPtr + globalQueue.localDeq:   \
                 globalQueue.localDeq - globalQueue.enqPtr)-1;
-
 
 #define write_move_normal(value)                                        \
     globalQueue.content[globalQueue.enqPtr] = value;                    \

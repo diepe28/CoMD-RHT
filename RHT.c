@@ -28,10 +28,8 @@ __thread long iterCountConsumer;
 void RHT_Produce_Secure(double value) {
 #if APPROACH_USING_POINTERS == 1
     UsingPointers_Produce(value);
-#elif APPROACH_ALREADY_CONSUMED == 1 || APPROACH_CONSUMER_NO_SYNC == 1 // consumer no sync uses alreadyConsume produce method
-    AlreadyConsumed_Produce(value);
-#elif APPROACH_NEW_LIMIT == 1
-    AlreadyConsumed_Produce(value);
+#elif APPROACH_NEW_LIMIT == 1 || APPROACH_ALREADY_CONSUMED == 1 || APPROACH_CONSUMER_NO_SYNC == 1
+    AlreadyConsumed_Produce(value); // consumer no sync uses alreadyConsume produce method
 #elif APPROACH_WRITE_INVERTED_NEW_LIMIT == 1
     WriteInverted_Produce_Secure(value);
 #elif APPROACH_SRMT == 1

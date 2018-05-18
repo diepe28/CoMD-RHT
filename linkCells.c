@@ -474,10 +474,12 @@ int getBoxFromCoord(LinkCell* boxes, real_t rr[3]) {
       if (ix == gridSize[0]) ix = gridSize[0] - 1;
    } else
       ix = gridSize[0]; // assign to halo cell
+
    if (rr[1] < localMax[1]) {
       if (iy == gridSize[1]) iy = gridSize[1] - 1;
    } else
       iy = gridSize[1];
+
    if (rr[2] < localMax[2]) {
       if (iz == gridSize[2]) iz = gridSize[2] - 1;
    } else
@@ -504,35 +506,24 @@ int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]) {
     // For each axis, if we are inside the local domain, make sure we get
     // a local link cell.  Otherwise, make sure we get a halo link cell.
     if (rr[0] < localMax[0]) {
-        if (ix == gridSize[0]) {
-            ix = gridSize[0] - 1;
-            RHT_Produce_Secure(ix);
-        }
-    } else {
+        if (ix == gridSize[0]) ix = gridSize[0] - 1;
+    } else
         ix = gridSize[0]; // assign to halo cell
-        RHT_Produce_Secure(ix);
-    }
-    if (rr[1] < localMax[1]) {
-        if (iy == gridSize[1]) {
-            iy = gridSize[1] - 1;
-            RHT_Produce_Secure(iy);
-        }
-    } else {
-        iy = gridSize[1];
-        RHT_Produce_Secure(iy);
-    }
-    if (rr[2] < localMax[2]) {
-        if (iz == gridSize[2]) {
-            iz = gridSize[2] - 1;
-            RHT_Produce_Secure(iz);
-        }
-    } else {
-        iz = gridSize[2];
-        RHT_Produce_Secure(iz);
-    }
 
-    //return getBoxFromTuple_Producer(boxes, ix, iy, iz);
-    return getBoxFromTuple(boxes, ix, iy, iz);
+    if (rr[1] < localMax[1]) {
+        if (iy == gridSize[1]) iy = gridSize[1] - 1;
+    } else
+        iy = gridSize[1];
+
+    if (rr[2] < localMax[2]) {
+        if (iz == gridSize[2]) iz = gridSize[2] - 1;
+    } else
+        iz = gridSize[2];
+
+    RHT_Produce_Secure(ix);
+    RHT_Produce_Secure(iy);
+    RHT_Produce_Secure(iz);
+    return getBoxFromTuple_Producer(boxes, ix, iy, iz);
 }
 
 int getBoxFromCoord_Consumer(LinkCell* boxes, real_t rr[3]) {
@@ -554,35 +545,25 @@ int getBoxFromCoord_Consumer(LinkCell* boxes, real_t rr[3]) {
     // For each axis, if we are inside the local domain, make sure we get
     // a local link cell.  Otherwise, make sure we get a halo link cell.
     if (rr[0] < localMax[0]) {
-        if (ix == gridSize[0]) {
-            ix = gridSize[0] - 1;
-            RHT_Consume_Check(ix);
-        }
-    } else {
+        if (ix == gridSize[0]) ix = gridSize[0] - 1;
+    } else
         ix = gridSize[0]; // assign to halo cell
-        RHT_Consume_Check(ix);
-    }
-    if (rr[1] < localMax[1]) {
-        if (iy == gridSize[1]) {
-            iy = gridSize[1] - 1;
-            RHT_Consume_Check(iy);
-        }
-    } else {
-        iy = gridSize[1];
-        RHT_Consume_Check(iy);
-    }
-    if (rr[2] < localMax[2]) {
-        if (iz == gridSize[2]) {
-            iz = gridSize[2] - 1;
-            RHT_Consume_Check(iz);
-        }
-    } else {
-        iz = gridSize[2];
-        RHT_Consume_Check(iz);
-    }
 
-    //return getBoxFromTuple_Consumer(boxes, ix, iy, iz);
-    return getBoxFromTuple(boxes, ix, iy, iz);
+    if (rr[1] < localMax[1]) {
+        if (iy == gridSize[1]) iy = gridSize[1] - 1;
+    } else
+        iy = gridSize[1];
+
+    if (rr[2] < localMax[2]) {
+        if (iz == gridSize[2]) iz = gridSize[2] - 1;
+    } else
+        iz = gridSize[2];
+
+    RHT_Consume_Check(ix);
+    RHT_Consume_Check(iy);
+    RHT_Consume_Check(iz);
+
+    return getBoxFromTuple_Consumer(boxes, ix, iy, iz);
 }
 
 /// Set the number of atoms to zero in all halo link cells.

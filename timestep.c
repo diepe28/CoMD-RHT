@@ -7,6 +7,7 @@
 #include "linkCells.h"
 #include "parallel.h"
 #include "performanceTimers.h"
+#include "RHT.h"
 
 static void advanceVelocity(SimFlat* s, int nBoxes, real_t dt);
 static void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt);
@@ -60,7 +61,8 @@ double timestep(SimFlat* s, int nSteps, real_t dt) {
 
    return s->ePotential;
 }
-
+// TODO, in general I think we should say something more about that manual replication allows us to
+// make better decissions, like choosing not to replicate timers on the consumer side
 double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
     for (int ii = 0; ii < nSteps; ++ii) {
         startTimer(velocityTimer);
@@ -72,7 +74,9 @@ double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
         stopTimer(positionTimer);
 
         startTimer(redistributeTimer);
-        redistributeAtoms_Producer(s);
+        // TODO, this part is not replicated for now because it has really tricky patterns
+        //redistributeAtoms_Producer(s);
+        redistributeAtoms(s);
         stopTimer(redistributeTimer);
 
         startTimer(computeForceTimer);
@@ -92,25 +96,17 @@ double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
 
 double timestep_Consumer(SimFlat* s, int nSteps, real_t dt) {
     for (int ii = 0; ii < nSteps; ++ii) {
-        //startTimer(velocityTimer);
-        advanceVelocity_Consumer(s, s->boxes->nLocalBoxes, 0.5 * dt);
-        //stopTimer(velocityTimer);
 
-        //startTimer(positionTimer);
+        advanceVelocity_Consumer(s, s->boxes->nLocalBoxes, 0.5 * dt);
+
         advancePosition_Consumer(s, s->boxes->nLocalBoxes, dt);
-        //stopTimer(positionTimer);
 
-        //startTimer(redistributeTimer);
-        redistributeAtoms_Consumer(s);
-        //stopTimer(redistributeTimer);
+        //redistributeAtoms_Consumer(s);
+        redistributeAtoms(s);
 
-        //startTimer(computeForceTimer);
         computeForce(s);
-        //stopTimer(computeForceTimer);
 
-        //startTimer(velocityTimer);
         advanceVelocity_Consumer(s, s->boxes->nLocalBoxes, 0.5 * dt);
-        //stopTimer(velocityTimer);
     }
 
     kineticEnergy_Consumer(s);
@@ -137,29 +133,74 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop patter with multiple values to produce
     // We can have the values as the last values of the macro to have a arg list separated by comma
     // and we can send the number of values to replicate in order to use the info for the var grouping
+    globalQueue.enqIt = 0;
+    groupVarProducer = 0.0;
+
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             s->atoms->p[iOff][0] += dt * s->atoms->f[iOff][0];
             s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
             s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
-            //RHT_Produce_Secure(s->atoms->p[iOff][0]);
-            //RHT_Produce_Secure(s->atoms->p[iOff][1]);
-            //RHT_Produce_Secure(s->atoms->p[iOff][2]);
+
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+            if (++globalQueue.enqIt == GROUP_GRANULARITY) {
+                RHT_Produce_Secure(groupVarProducer);
+                globalQueue.enqIt = 0;
+            } else {
+                groupVarProducer +=
+                        s->atoms->p[iOff][0] +
+                        s->atoms->p[iOff][1] +
+                        s->atoms->p[iOff][2];
+            }
+#else
+            RHT_Produce_Secure(s->atoms->p[iOff][0]);
+            RHT_Produce_Secure(s->atoms->p[iOff][1]);
+            RHT_Produce_Secure(s->atoms->p[iOff][2]);
+#endif
         }
     }
+
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+    if (globalQueue.enqIt != GROUP_GRANULARITY) {
+        RHT_Produce_Secure(groupVarProducer);
+    }
+#endif
+
 }
 
 void advanceVelocity_Consumer(SimFlat* s, int nBoxes, real_t dt) {
+    globalQueue.deqIt = 0;
+    groupVarConsumer = 0.0;
+
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             s->atoms->p[iOff][0] += dt * s->atoms->f[iOff][0];
             s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
             s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
-            //RHT_Consume_Check(s->atoms->p[iOff][0]);
-            //RHT_Consume_Check(s->atoms->p[iOff][1]);
-            //RHT_Consume_Check(s->atoms->p[iOff][2]);
+
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+            if (++globalQueue.deqIt == GROUP_GRANULARITY) {
+                RHT_Consume_Check(groupVarConsumer);
+                globalQueue.deqIt = 0;
+            } else {
+                groupVarConsumer +=
+                        s->atoms->p[iOff][0] +
+                        s->atoms->p[iOff][1] +
+                        s->atoms->p[iOff][2];
+            }
+#else
+            RHT_Consume_Check(s->atoms->p[iOff][0]);
+            RHT_Consume_Check(s->atoms->p[iOff][1]);
+            RHT_Consume_Check(s->atoms->p[iOff][2]);
+#endif
         }
     }
+
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+    if (globalQueue.deqIt != GROUP_GRANULARITY) {
+        RHT_Consume_Check(groupVarConsumer);
+    }
+#endif
 }
 
 void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
@@ -175,7 +216,10 @@ void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
-    // TODO improve macro to support this loop patter with multiple values to produce, same as before
+    // TODO improve macro to support this loop pattern with multiple values to produce, same as before
+    globalQueue.enqIt = 0;
+    groupVarProducer = 0.0;
+
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             int iSpecies = s->atoms->iSpecies[iOff];
@@ -183,14 +227,37 @@ void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
             s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
             s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
-            //RHT_Produce_Secure(s->atoms->r[iOff][0]);
-            //RHT_Produce_Secure(s->atoms->r[iOff][1]);
-            //RHT_Produce_Secure(s->atoms->r[iOff][2]);
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+            if (++globalQueue.enqIt == GROUP_GRANULARITY) {
+                RHT_Produce_Secure(groupVarProducer);
+                globalQueue.enqIt = 0;
+            } else {
+                groupVarProducer +=
+                        s->atoms->r[iOff][0] +
+                        s->atoms->r[iOff][1] +
+                        s->atoms->r[iOff][2];
+            }
+#else
+            RHT_Produce_Secure(s->atoms->r[iOff][0]);
+            RHT_Produce_Secure(s->atoms->r[iOff][1]);
+            RHT_Produce_Secure(s->atoms->r[iOff][2]);
+#endif
         }
     }
+
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+    if (globalQueue.enqIt != GROUP_GRANULARITY) {
+        RHT_Produce_Secure(groupVarProducer);
+    }
+#endif
+
 }
 
 void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
+    // TODO improve macro to support this loop pattern with multiple values to produce, same as before
+    globalQueue.deqIt = 0;
+    groupVarConsumer = 0.0;
+
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             int iSpecies = s->atoms->iSpecies[iOff];
@@ -198,11 +265,29 @@ void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
             s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
             s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
-            //RHT_Consume_Check(s->atoms->r[iOff][0]);
-            //RHT_Consume_Check(s->atoms->r[iOff][1]);
-            //RHT_Consume_Check(s->atoms->r[iOff][2]);
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+            if (++globalQueue.deqIt == GROUP_GRANULARITY) {
+                RHT_Consume_Check(groupVarConsumer);
+                globalQueue.deqIt = 0;
+            } else {
+                groupVarConsumer +=
+                        s->atoms->r[iOff][0] +
+                        s->atoms->r[iOff][1] +
+                        s->atoms->r[iOff][2];
+            }
+#else
+            RHT_Consume_Check(s->atoms->r[iOff][0]);
+            RHT_Consume_Check(s->atoms->r[iOff][1]);
+            RHT_Consume_Check(s->atoms->r[iOff][2]);
+#endif
         }
     }
+
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_SRMT == 0
+    if (globalQueue.deqIt != GROUP_GRANULARITY) {
+        RHT_Consume_Check(groupVarConsumer);
+    }
+#endif
 }
 
 /// Calculates total kinetic and potential energy across all tasks.  The
