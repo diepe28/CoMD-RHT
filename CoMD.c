@@ -360,53 +360,31 @@ double mainExecution_producer(Command *cmd) {
 void consumer_thread_func(void *args) {
     ConsumerParams *params = (ConsumerParams *) args;
     Command * cmd = params->command;
+    SetThreadAffinity(params->executionCore);
 
     currentThread = ConsumerThread;
 
     SimFlat *sim = initSimulation((*cmd));
     //SimFlat *sim = initSimulation_Consumer((*cmd));
-    //printSimulationDataYaml(yamlFile, sim);
-    //printSimulationDataYaml(screenOut, sim);
 
     //Validate *validate = initValidate_Consumer(sim); // atom counts, energy
     Validate *validate = initValidate(sim); // atom counts, energy
-    //timestampBarrier("Initialization Finished\n");
-
-    //timestampBarrier("Starting simulation\n");
 
     // This is the CoMD main loop
     const int nSteps = sim->nSteps;
     const int printRate = sim->printRate;
     int iStep = 0;
-    //profileStart(loopTimer);
     for (; iStep < nSteps;) {
-        //startTimer(commReduceTimer);
         sumAtoms_Consumer(sim);
-        //stopTimer(commReduceTimer);
-
-        //startTimer(timestepTimer);
         timestep_Consumer(sim, printRate, sim->dt);
-        //stopTimer(timestepTimer);
-
         iStep += printRate;
     }
-    //profileStop(loopTimer);
 
     sumAtoms_Consumer(sim);
-//    timestampBarrier("Ending simulation\n");
-
-    // Epilog
-//    validateResult(validate, sim);
-//    profileStop(totalTimer);
-
-//    printPerformanceResults(sim->atoms->nGlobal, sim->printRate);
-//    printPerformanceResultsYaml(yamlFile);
 
     destroySimulation(&sim);
     comdFree(validate);
 
-//    finalizeSubsystems();
-//    timestampBarrier("CoMD Ending\n");
 }
 
 /// Initialized the main CoMD data stucture, SimFlat, based on command

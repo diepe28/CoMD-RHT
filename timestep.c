@@ -75,12 +75,11 @@ double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
 
         startTimer(redistributeTimer);
         // TODO, this part is not replicated for now because it has really tricky patterns
-        //redistributeAtoms_Producer(s);
-        redistributeAtoms(s);
+        redistributeAtoms_Producer(s);
         stopTimer(redistributeTimer);
 
         startTimer(computeForceTimer);
-        // TODO, where is computy force handler
+        // TODO, where is compute force handler
         computeForce(s);
         stopTimer(computeForceTimer);
 
@@ -96,16 +95,10 @@ double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
 
 double timestep_Consumer(SimFlat* s, int nSteps, real_t dt) {
     for (int ii = 0; ii < nSteps; ++ii) {
-
         advanceVelocity_Consumer(s, s->boxes->nLocalBoxes, 0.5 * dt);
-
         advancePosition_Consumer(s, s->boxes->nLocalBoxes, dt);
-
-        //redistributeAtoms_Consumer(s);
-        redistributeAtoms(s);
-
+        redistributeAtoms_Consumer(s);
         computeForce(s);
-
         advanceVelocity_Consumer(s, s->boxes->nLocalBoxes, 0.5 * dt);
     }
 
@@ -317,24 +310,24 @@ void kineticEnergy(SimFlat* s) {
 
 void kineticEnergy_Producer(SimFlat* s) {
     real_t eLocal[2];
-    //printf("Producer epotential: %f \n", s->ePotential);
     eLocal[0] = s->ePotential;
     eLocal[1] = 0;
     RHT_Produce_Secure(eLocal[0]);
-    //RHT_Produce_Secure(eLocal[1]);
+    RHT_Produce_Secure(eLocal[1]);
 
-    // TODO transform this loop as well
+    globalQueue.enqIt = 0;
+    groupVarProducer = 0.0;
+
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
-        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
-            int iSpecies = s->atoms->iSpecies[iOff];
-            real_t invMass = 0.5 / s->species[iSpecies].mass;
-
-            //RHT_Produce_Secure(invMass);
-            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
-                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
-                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
-            //RHT_Produce_Secure(eLocal[1]);
-        }
+        int iOff = MAXATOMS * iBox, ii = 0;
+        replicate_loop_producer(0, s->boxes->nAtoms[iBox], ii,
+                                ii++ && iOff++, // a way to get multiple values changed per iteration
+                                eLocal[1],
+                                int iSpecies = s->atoms->iSpecies[iOff];
+                                        real_t invMass = 0.5 / s->species[iSpecies].mass;
+                                        eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                                                      s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                                                      s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;)
     }
 
     real_t eSum[2];
@@ -348,24 +341,21 @@ void kineticEnergy_Producer(SimFlat* s) {
 
 void kineticEnergy_Consumer(SimFlat* s) {
     real_t eLocal[2];
-    //printf("Consumer epotential: %f \n", s->ePotential);
     eLocal[0] = s->ePotential;
     eLocal[1] = 0;
     RHT_Consume_Check(eLocal[0]);
-    //RHT_Consume_Check(eLocal[1]);
+    RHT_Consume_Check(eLocal[1]);
 
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
-        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
-            int iSpecies = s->atoms->iSpecies[iOff];
-            real_t invMass = 0.5 / s->species[iSpecies].mass;
-
-            //RHT_Consume_Check(invMass);
-            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
-                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
-                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
-            //RHT_Consume_Check(eLocal[1]);
-
-        }
+        int iOff = MAXATOMS * iBox, ii = 0;
+        replicate_loop_consumer(0, s->boxes->nAtoms[iBox], ii,
+                                ii++ && iOff++, // a way to get multiple values changed per iteration
+                                eLocal[1],
+                                int iSpecies = s->atoms->iSpecies[iOff];
+                                        real_t invMass = 0.5 / s->species[iSpecies].mass;
+                                        eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                                                      s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                                                      s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;)
     }
 
     real_t eSum[2];
@@ -411,8 +401,7 @@ void redistributeAtoms_Producer(SimFlat* sim) {
     stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
-        //sortAtomsInCell_Producer(sim->atoms, sim->boxes, ii);
-        sortAtomsInCell(sim->atoms, sim->boxes, ii);
+        sortAtomsInCell_Producer(sim->atoms, sim->boxes, ii);
 }
 
 
@@ -424,6 +413,5 @@ void redistributeAtoms_Consumer(SimFlat* sim) {
     stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
-        //sortAtomsInCell_Consumer(sim->atoms, sim->boxes, ii);
-        sortAtomsInCell(sim->atoms, sim->boxes, ii);
+        sortAtomsInCell_Consumer(sim->atoms, sim->boxes, ii);
 }

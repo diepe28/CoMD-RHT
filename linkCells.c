@@ -377,9 +377,7 @@ void updateLinkCells(LinkCell* boxes, Atoms* atoms) {
 }
 
 void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
-    // TODO replicate this as well
-    emptyHaloCells(boxes);
-    //emptyHaloCells_Producer(boxes);
+    emptyHaloCells_Producer(boxes);
 
     for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
         int iOff = iBox * MAXATOMS;
@@ -399,8 +397,7 @@ void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
 }
 
 void updateLinkCells_Consumer(LinkCell* boxes, Atoms* atoms) {
-    emptyHaloCells(boxes);
-    //emptyHaloCells_Consumer(boxes);
+    emptyHaloCells_Consumer(boxes);
 
     for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
         int iOff = iBox * MAXATOMS;

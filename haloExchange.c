@@ -692,7 +692,7 @@ void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
 
     int begin = iBox * MAXATOMS;
     int end = begin + nAtoms;
-    // TODO, another loop pattern, although there is no calculus we need to produce every value
+    // TODO, apply var grouping here... another loop pattern, although there is no calculus we need to produce every value
     for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
         tmp[iTmp].gid = atoms->gid[ii];
         tmp[iTmp].type = atoms->iSpecies[ii];
