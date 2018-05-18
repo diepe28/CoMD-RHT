@@ -234,7 +234,7 @@ static int are_both_nan(double pValue, double cValue){
     }
 #else
 #define replicate_loop_producer(sIndex, fIndex, iterator, iterOp, value, operation) \
-    iterCountProducer = fIndex - sIndex;                                            \
+    iterCountProducer = (fIndex) - (sIndex);                                        \
     replicate_loop_work(iterCountProducer, iterator, iterOp, value, operation)
 #endif
 
@@ -254,7 +254,7 @@ static int are_both_nan(double pValue, double cValue){
     if (groupIncompleteConsumer) RHT_Consume_Check(groupVarConsumer);
 #else // we simply re construct the loop
 #define replicate_loop_consumer(sIndex, fIndex, iterator, iterOp, value, operation) \
-    iterCountConsumer = fIndex - sIndex;                                            \
+    iterCountConsumer = (fIndex) - (sIndex);                                        \
     for(; iterCountConsumer-- > 0; iterOp){                                         \
         operation;                                                                  \
         RHT_Consume_Check(value);                                                   \

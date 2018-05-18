@@ -88,6 +88,8 @@ static void emptyHaloCells_Producer(LinkCell* boxes);
 static void emptyHaloCells_Consumer(LinkCell* boxes);
 
 static void getTuple(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
+static void getTuple_Producer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
+static void getTuple_Consumer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
 
 LinkCell* initLinkCells(const Domain* domain, real_t cutoff)
 {
@@ -149,6 +151,39 @@ int getNeighborBoxes(LinkCell* boxes, int iBox, int* nbrBoxes)
             nbrBoxes[count++] = getBoxFromTuple(boxes,i,j,k);
    
    return count;
+}
+
+int getNeighborBoxes_Producer(LinkCell* boxes, int iBox, int* nbrBoxes)
+{
+    int ix, iy, iz;
+    getTuple_Producer(boxes, iBox, &ix, &iy, &iz);
+
+    int count = 0;
+    for (int i=ix-1; i<=ix+1; i++)
+        for (int j=iy-1; j<=iy+1; j++) {
+            for (int k=iz-1; k<=iz+1; k++) {
+                nbrBoxes[count++] = getBoxFromTuple(boxes, i, j, k);
+                RHT_Produce_Secure(nbrBoxes[count-1]);
+            }
+        }
+
+    return count;
+}
+
+int getNeighborBoxes_Consumer(LinkCell* boxes, int iBox, int* nbrBoxes)
+{
+    int ix, iy, iz;
+    getTuple_Consumer(boxes, iBox, &ix, &iy, &iz);
+
+    int count = 0;
+    for (int i=ix-1; i<=ix+1; i++)
+        for (int j=iy-1; j<=iy+1; j++)
+            for (int k=iz-1; k<=iz+1; k++) {
+                nbrBoxes[count++] = getBoxFromTuple(boxes, i, j, k);
+                RHT_Consume_Check(nbrBoxes[count-1]);
+            }
+
+    return count;
 }
 
 /// \details
@@ -275,7 +310,7 @@ int getBoxFromTuple_Producer(LinkCell* boxes, int ix, int iy, int iz) {
         iBox = ix + gridSize[0] * iy + gridSize[0] * gridSize[1] * iz;
     }
 
-    RHT_Produce_Secure(iBox); // every single if calculates ibox
+    //this is actually validated where is called, RHT_Produce_Secure(iBox); // every single if calculates ibox
 
     assert(iBox >= 0);
     assert(iBox < boxes->nTotalBoxes);
@@ -321,7 +356,7 @@ int getBoxFromTuple_Consumer(LinkCell* boxes, int ix, int iy, int iz) {
         iBox = ix + gridSize[0] * iy + gridSize[0] * gridSize[1] * iz;
     }
 
-    RHT_Consume_Check(iBox); // every single if calculates ibox
+    //this is actually validated where is called, RHT_Consume_Check(iBox); // every single if calculates ibox
     assert(iBox >= 0);
     assert(iBox < boxes->nTotalBoxes);
 
@@ -441,6 +476,8 @@ void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
         RHT_Produce_Secure(ii);
         while (ii < boxes->nAtoms[iBox]) {
             int jBox = getBoxFromCoord_Producer(boxes, atoms->r[iOff + ii]);
+            RHT_Produce_Secure(jBox);
+
             if (jBox != iBox)
                 moveAtom_Producer(boxes, atoms, ii, iBox, jBox);
             else
@@ -460,6 +497,8 @@ void updateLinkCells_Consumer(LinkCell* boxes, Atoms* atoms) {
         RHT_Consume_Check(ii);
         while (ii < boxes->nAtoms[iBox]) {
             int jBox = getBoxFromCoord_Consumer(boxes, atoms->r[iOff + ii]);
+            RHT_Consume_Check(jBox);
+
             if (jBox != iBox)
                 moveAtom_Consumer(boxes, atoms, ii, iBox, jBox);
             else
@@ -673,78 +712,231 @@ void emptyHaloCells_Consumer(LinkCell* boxes) {
 /// \param [out] ixp  x grid coord of link cell.
 /// \param [out] iyp  y grid coord of link cell.
 /// \param [out] izp  z grid coord of link cell.
-void getTuple(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp)
-{
-   int ix, iy, iz;
-   const int* gridSize = boxes->gridSize; // alias
-   
-   // If a local box
-   if( iBox < boxes->nLocalBoxes)
-   {
-      ix = iBox % gridSize[0];
-      iBox /= gridSize[0];
-      iy = iBox % gridSize[1];
-      iz = iBox / gridSize[1];
-   }
-   // It's a halo box
-   else 
-   {
-      int ink;
-      ink = iBox - boxes->nLocalBoxes;
-      if (ink < 2*gridSize[1]*gridSize[2])
-      {
-         if (ink < gridSize[1]*gridSize[2]) 
-         {
-            ix = 0;
-         }
-         else 
-         {
-            ink -= gridSize[1]*gridSize[2];
-            ix = gridSize[0] + 1;
-         }
-         iy = 1 + ink % gridSize[1];
-         iz = 1 + ink / gridSize[1];
-      }
-      else if (ink < (2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2))) 
-      {
-         ink -= 2 * gridSize[2] * gridSize[1];
-         if (ink < ((gridSize[0] + 2) *gridSize[2])) 
-         {
-            iy = 0;
-         }
-         else 
-         {
-            ink -= (gridSize[0] + 2) * gridSize[2];
-            iy = gridSize[1] + 1;
-         }
-         ix = ink % (gridSize[0] + 2);
-         iz = 1 + ink / (gridSize[0] + 2);
-      }
-      else 
-      {
-         ink -= 2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2);
-         if (ink < ((gridSize[0] + 2) * (gridSize[1] + 2))) 
-         {
-            iz = 0;
-         }
-         else 
-         {
-            ink -= (gridSize[0] + 2) * (gridSize[1] + 2);
-            iz = gridSize[2] + 1;
-         }
-         ix = ink % (gridSize[0] + 2);
-         iy = ink / (gridSize[0] + 2);
-      }
-      
-      // Calculated as off by 1
-      ix--;
-      iy--;
-      iz--;
-   }
-   
-   *ixp = ix;
-   *iyp = iy;
-   *izp = iz;
+void getTuple(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp) {
+    int ix, iy, iz;
+    const int *gridSize = boxes->gridSize; // alias
+
+    // If a local box
+    if (iBox < boxes->nLocalBoxes) {
+        ix = iBox % gridSize[0];
+        iBox /= gridSize[0];
+        iy = iBox % gridSize[1];
+        iz = iBox / gridSize[1];
+    }
+        // It's a halo box
+    else {
+        int ink;
+        ink = iBox - boxes->nLocalBoxes;
+        if (ink < 2 * gridSize[1] * gridSize[2]) {
+            if (ink < gridSize[1] * gridSize[2]) {
+                ix = 0;
+            } else {
+                ink -= gridSize[1] * gridSize[2];
+                ix = gridSize[0] + 1;
+            }
+            iy = 1 + ink % gridSize[1];
+            iz = 1 + ink / gridSize[1];
+        } else if (ink < (2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2))) {
+            ink -= 2 * gridSize[2] * gridSize[1];
+            if (ink < ((gridSize[0] + 2) * gridSize[2])) {
+                iy = 0;
+            } else {
+                ink -= (gridSize[0] + 2) * gridSize[2];
+                iy = gridSize[1] + 1;
+            }
+            ix = ink % (gridSize[0] + 2);
+            iz = 1 + ink / (gridSize[0] + 2);
+        } else {
+            ink -= 2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2);
+            if (ink < ((gridSize[0] + 2) * (gridSize[1] + 2))) {
+                iz = 0;
+            } else {
+                ink -= (gridSize[0] + 2) * (gridSize[1] + 2);
+                iz = gridSize[2] + 1;
+            }
+            ix = ink % (gridSize[0] + 2);
+            iy = ink / (gridSize[0] + 2);
+        }
+
+        // Calculated as off by 1
+        ix--;
+        iy--;
+        iz--;
+    }
+
+    *ixp = ix;
+    *iyp = iy;
+    *izp = iz;
+}
+
+void getTuple_Producer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp) {
+    int ix, iy, iz;
+    const int *gridSize = boxes->gridSize; // alias
+
+    // If a local box
+    if (iBox < boxes->nLocalBoxes) {
+        ix = iBox % gridSize[0];
+        RHT_Produce_Secure(ix);
+
+        iBox /= gridSize[0];
+        RHT_Produce_Secure(iBox);
+
+        iy = iBox % gridSize[1];
+        RHT_Produce_Secure(iy);
+
+        iz = iBox / gridSize[1];
+        RHT_Produce_Secure(iz);
+    }
+        // It's a halo box
+    else {
+        int ink;
+        ink = iBox - boxes->nLocalBoxes;
+        RHT_Produce_Secure(ink);
+
+        if (ink < 2 * gridSize[1] * gridSize[2]) {
+            if (ink < gridSize[1] * gridSize[2]) {
+                ix = 0;
+                RHT_Produce_Secure(ix);
+            } else {
+                ink -= gridSize[1] * gridSize[2];
+                ix = gridSize[0] + 1;
+                RHT_Produce_Secure(ink);
+                RHT_Produce_Secure(ix);
+            }
+            iy = 1 + ink % gridSize[1];
+            iz = 1 + ink / gridSize[1];
+            RHT_Produce_Secure(iy);
+            RHT_Produce_Secure(iz);
+        } else if (ink < (2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2))) {
+            ink -= 2 * gridSize[2] * gridSize[1];
+            RHT_Produce_Secure(ink);
+            if (ink < ((gridSize[0] + 2) * gridSize[2])) {
+                iy = 0;
+                RHT_Produce_Secure(iy);
+            } else {
+                ink -= (gridSize[0] + 2) * gridSize[2];
+                iy = gridSize[1] + 1;
+                RHT_Produce_Secure(ink);
+                RHT_Produce_Secure(iy);
+            }
+            ix = ink % (gridSize[0] + 2);
+            iz = 1 + ink / (gridSize[0] + 2);
+            RHT_Produce_Secure(ix);
+            RHT_Produce_Secure(iz);
+        } else {
+            ink -= 2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2);
+            if (ink < ((gridSize[0] + 2) * (gridSize[1] + 2))) {
+                iz = 0;
+                RHT_Produce_Secure(iz);
+            } else {
+                ink -= (gridSize[0] + 2) * (gridSize[1] + 2);
+                iz = gridSize[2] + 1;
+                RHT_Produce_Secure(ink);
+                RHT_Produce_Secure(iz);
+            }
+            ix = ink % (gridSize[0] + 2);
+            iy = ink / (gridSize[0] + 2);
+            RHT_Produce_Secure(ix);
+            RHT_Produce_Secure(iz);
+        }
+
+        // Calculated as off by 1
+        ix--;
+        iy--;
+        iz--;
+        RHT_Produce_Secure(ix);
+        RHT_Produce_Secure(iy);
+        RHT_Produce_Secure(iz);
+    }
+
+    *ixp = ix;
+    *iyp = iy;
+    *izp = iz;
+}
+
+void getTuple_Consumer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp) {
+    int ix, iy, iz;
+    const int *gridSize = boxes->gridSize; // alias
+
+    // If a local box
+    if (iBox < boxes->nLocalBoxes) {
+        ix = iBox % gridSize[0];
+        RHT_Consume_Check(ix);
+
+        iBox /= gridSize[0];
+        RHT_Consume_Check(iBox);
+
+        iy = iBox % gridSize[1];
+        RHT_Consume_Check(iy);
+
+        iz = iBox / gridSize[1];
+        RHT_Consume_Check(iz);
+    }
+        // It's a halo box
+    else {
+        int ink;
+        ink = iBox - boxes->nLocalBoxes;
+        RHT_Consume_Check(ink);
+
+        if (ink < 2 * gridSize[1] * gridSize[2]) {
+            if (ink < gridSize[1] * gridSize[2]) {
+                ix = 0;
+                RHT_Consume_Check(ix);
+            } else {
+                ink -= gridSize[1] * gridSize[2];
+                ix = gridSize[0] + 1;
+                RHT_Consume_Check(ink);
+                RHT_Consume_Check(ix);
+            }
+            iy = 1 + ink % gridSize[1];
+            iz = 1 + ink / gridSize[1];
+            RHT_Consume_Check(iy);
+            RHT_Consume_Check(iz);
+        } else if (ink < (2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2))) {
+            ink -= 2 * gridSize[2] * gridSize[1];
+            RHT_Consume_Check(ink);
+            if (ink < ((gridSize[0] + 2) * gridSize[2])) {
+                iy = 0;
+                RHT_Consume_Check(iy);
+            } else {
+                ink -= (gridSize[0] + 2) * gridSize[2];
+                iy = gridSize[1] + 1;
+                RHT_Consume_Check(ink);
+                RHT_Consume_Check(iy);
+            }
+            ix = ink % (gridSize[0] + 2);
+            iz = 1 + ink / (gridSize[0] + 2);
+            RHT_Consume_Check(ix);
+            RHT_Consume_Check(iz);
+        } else {
+            ink -= 2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2);
+            if (ink < ((gridSize[0] + 2) * (gridSize[1] + 2))) {
+                iz = 0;
+                RHT_Consume_Check(iz);
+            } else {
+                ink -= (gridSize[0] + 2) * (gridSize[1] + 2);
+                iz = gridSize[2] + 1;
+                RHT_Consume_Check(ink);
+                RHT_Consume_Check(iz);
+            }
+            ix = ink % (gridSize[0] + 2);
+            iy = ink / (gridSize[0] + 2);
+            RHT_Consume_Check(ix);
+            RHT_Consume_Check(iz);
+        }
+
+        // Calculated as off by 1
+        ix--;
+        iy--;
+        iz--;
+        RHT_Consume_Check(ix);
+        RHT_Consume_Check(iy);
+        RHT_Consume_Check(iz);
+    }
+
+    *ixp = ix;
+    *iyp = iy;
+    *izp = iz;
 }
 
 

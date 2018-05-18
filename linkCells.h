@@ -33,6 +33,10 @@ LinkCell* initLinkCells(const struct DomainSt* domain, real_t cutoff);
 void destroyLinkCells(LinkCell** boxes);
 
 int getNeighborBoxes(LinkCell* boxes, int iBox, int* nbrBoxes);
+int getNeighborBoxes_Producer(LinkCell* boxes, int iBox, int* nbrBoxes);
+int getNeighborBoxes_Consumer(LinkCell* boxes, int iBox, int* nbrBoxes);
+
+
 void putAtomInBox(LinkCell* boxes, struct AtomsSt* atoms,
                   const int gid, const int iType,
                   const real_t x,  const real_t y,  const real_t z,

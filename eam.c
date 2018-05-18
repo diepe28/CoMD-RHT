@@ -380,7 +380,10 @@ int eamForce_Producer(SimFlat* s) {
     // loop over local boxes
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
-        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        RHT_Produce_Secure(nIBox);
+        int nNbrBoxes = getNeighborBoxes_Producer(s->boxes, iBox, nbrBoxes);
+        RHT_Produce_Secure(nNbrBoxes);
+
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
@@ -458,6 +461,7 @@ int eamForce_Producer(SimFlat* s) {
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
         int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
@@ -540,7 +544,10 @@ int eamForce_Consumer(SimFlat* s) {
     // loop over local boxes
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
-        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        RHT_Consume_Check(nIBox);
+        int nNbrBoxes = getNeighborBoxes_Consumer(s->boxes, iBox, nbrBoxes);
+        RHT_Consume_Check(nNbrBoxes);
+
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
