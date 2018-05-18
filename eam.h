@@ -58,5 +58,5 @@ typedef struct EamPotentialSt
    ForceExchangeData* forceExchangeData;
 } EamPotential;
 
-struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type, ExecutionThread currentThread);
+struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type);
 #endif

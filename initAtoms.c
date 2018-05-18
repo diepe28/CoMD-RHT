@@ -22,33 +22,31 @@ static void computeVcm_Consumer(SimFlat* s, real_t vcm[3]);
 /// \details
 /// Call functions such as createFccLattice and setTemperature to set up
 /// initial atom positions and momenta.
-Atoms* initAtoms(LinkCell* boxes)
-{
-   Atoms* atoms = comdMalloc(sizeof(Atoms));
+Atoms* initAtoms(LinkCell* boxes) {
+    Atoms *atoms = comdMalloc(sizeof(Atoms));
 
-   int maxTotalAtoms = MAXATOMS*boxes->nTotalBoxes;
+    int maxTotalAtoms = MAXATOMS * boxes->nTotalBoxes;
 
-   atoms->gid =      (int*)   comdMalloc(maxTotalAtoms*sizeof(int));
-   atoms->iSpecies = (int*)   comdMalloc(maxTotalAtoms*sizeof(int));
-   atoms->r =        (real3*) comdMalloc(maxTotalAtoms*sizeof(real3));
-   atoms->p =        (real3*) comdMalloc(maxTotalAtoms*sizeof(real3));
-   atoms->f =        (real3*) comdMalloc(maxTotalAtoms*sizeof(real3));
-   atoms->U =        (real_t*)comdMalloc(maxTotalAtoms*sizeof(real_t));
+    atoms->gid = (int *) comdMalloc(maxTotalAtoms * sizeof(int));
+    atoms->iSpecies = (int *) comdMalloc(maxTotalAtoms * sizeof(int));
+    atoms->r = (real3 *) comdMalloc(maxTotalAtoms * sizeof(real3));
+    atoms->p = (real3 *) comdMalloc(maxTotalAtoms * sizeof(real3));
+    atoms->f = (real3 *) comdMalloc(maxTotalAtoms * sizeof(real3));
+    atoms->U = (real_t *) comdMalloc(maxTotalAtoms * sizeof(real_t));
 
-   atoms->nLocal = 0;
-   atoms->nGlobal = 0;
+    atoms->nLocal = 0;
+    atoms->nGlobal = 0;
 
-   for (int iOff = 0; iOff < maxTotalAtoms; iOff++)
-   {
-      atoms->gid[iOff] = 0;
-      atoms->iSpecies[iOff] = 0;
-      zeroReal3(atoms->r[iOff]);
-      zeroReal3(atoms->p[iOff]);
-      zeroReal3(atoms->f[iOff]);
-      atoms->U[iOff] = 0.;
-   }
+    for (int iOff = 0; iOff < maxTotalAtoms; iOff++) {
+        atoms->gid[iOff] = 0;
+        atoms->iSpecies[iOff] = 0;
+        zeroReal3(atoms->r[iOff]);
+        zeroReal3(atoms->p[iOff]);
+        zeroReal3(atoms->f[iOff]);
+        atoms->U[iOff] = 0.;
+    }
 
-   return atoms;
+    return atoms;
 }
 
 void destroyAtoms(Atoms *atoms)
@@ -100,9 +98,18 @@ void createFccLattice(int nx, int ny, int nz, real_t lat, SimFlat* s) {
             }
 
    // set total atoms in simulation
-   startTimer(commReduceTimer);
-   addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
-   stopTimer(commReduceTimer);
+    if(currentThread == NotReplicatedThread) {
+        startTimer(commReduceTimer);
+        addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+        stopTimer(commReduceTimer);
+    }
+    else if(currentThread == ProducerThread){
+        startTimer(commReduceTimer);
+        addIntParallel_Producer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+        stopTimer(commReduceTimer);
+    } else{
+        addIntParallel_Consumer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+    }
 
    assert(s->atoms->nGlobal == nb * nx * ny * nz);
 }
@@ -143,7 +150,7 @@ void createFccLattice_Producer(int nx, int ny, int nz, real_t lat, SimFlat* s) {
 
    // set total atoms in simulation
    startTimer(commReduceTimer);
-   addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+   addIntParallel_Producer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
    stopTimer(commReduceTimer);
 
    assert(s->atoms->nGlobal == nb * nx * ny * nz);
@@ -185,7 +192,7 @@ void createFccLattice_Consumer(int nx, int ny, int nz, real_t lat, SimFlat* s) {
 
    // set total atoms in simulation
    //startTimer(commReduceTimer);
-   addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+   addIntParallel_Consumer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
    //stopTimer(commReduceTimer);
 
    assert(s->atoms->nGlobal == nb * nx * ny * nz);
@@ -193,28 +200,67 @@ void createFccLattice_Consumer(int nx, int ny, int nz, real_t lat, SimFlat* s) {
 
 /// Sets the center of mass velocity of the system.
 /// \param [in] newVcm The desired center of mass velocity.
-void setVcm(SimFlat* s, real_t newVcm[3])
-{
-   real_t oldVcm[3];
-   computeVcm(s, oldVcm);
+void setVcm(SimFlat* s, real_t newVcm[3]) {
+    real_t oldVcm[3];
+    computeVcm(s, oldVcm);
 
-   real_t vShift[3];
-   vShift[0] = (newVcm[0] - oldVcm[0]);
-   vShift[1] = (newVcm[1] - oldVcm[1]);
-   vShift[2] = (newVcm[2] - oldVcm[2]);
+    real_t vShift[3];
+    vShift[0] = (newVcm[0] - oldVcm[0]);
+    vShift[1] = (newVcm[1] - oldVcm[1]);
+    vShift[2] = (newVcm[2] - oldVcm[2]);
 
-   for (int iBox=0; iBox<s->boxes->nLocalBoxes; ++iBox)
-   {
-      for (int iOff=MAXATOMS*iBox, ii=0; ii<s->boxes->nAtoms[iBox]; ++ii, ++iOff)
-      {
-         int iSpecies = s->atoms->iSpecies[iOff];
-         real_t mass = s->species[iSpecies].mass;
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; ++iBox) {
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ++ii, ++iOff) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t mass = s->species[iSpecies].mass;
 
-         s->atoms->p[iOff][0] += mass * vShift[0];
-         s->atoms->p[iOff][1] += mass * vShift[1];
-         s->atoms->p[iOff][2] += mass * vShift[2];
-      }
-   }
+            s->atoms->p[iOff][0] += mass * vShift[0];
+            s->atoms->p[iOff][1] += mass * vShift[1];
+            s->atoms->p[iOff][2] += mass * vShift[2];
+        }
+    }
+}
+
+void setVcm_Producer(SimFlat* s, real_t newVcm[3]) {
+    real_t oldVcm[3];
+    computeVcm_Producer(s, oldVcm);
+
+    real_t vShift[3];
+    vShift[0] = (newVcm[0] - oldVcm[0]);
+    vShift[1] = (newVcm[1] - oldVcm[1]);
+    vShift[2] = (newVcm[2] - oldVcm[2]);
+
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; ++iBox) {
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ++ii, ++iOff) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t mass = s->species[iSpecies].mass;
+
+            s->atoms->p[iOff][0] += mass * vShift[0];
+            s->atoms->p[iOff][1] += mass * vShift[1];
+            s->atoms->p[iOff][2] += mass * vShift[2];
+        }
+    }
+}
+
+void setVcm_Consumer(SimFlat* s, real_t newVcm[3]) {
+    real_t oldVcm[3];
+    computeVcm_Consumer(s, oldVcm);
+
+    real_t vShift[3];
+    vShift[0] = (newVcm[0] - oldVcm[0]);
+    vShift[1] = (newVcm[1] - oldVcm[1]);
+    vShift[2] = (newVcm[2] - oldVcm[2]);
+
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; ++iBox) {
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ++ii, ++iOff) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t mass = s->species[iSpecies].mass;
+
+            s->atoms->p[iOff][0] += mass * vShift[0];
+            s->atoms->p[iOff][1] += mass * vShift[1];
+            s->atoms->p[iOff][2] += mass * vShift[2];
+        }
+    }
 }
 
 /// Sets the temperature of system.
@@ -277,8 +323,8 @@ void setTemperature_Producer(SimFlat* s, real_t temperature) {
     // kinetic energy  = 3/2 kB * Temperature
     if (temperature == 0.0) return;
     real_t vZero[3] = {0., 0., 0.};
-    setVcm(s, vZero);
-    kineticEnergy(s);
+    setVcm_Producer(s, vZero);
+    kineticEnergy_Producer(s);
     real_t temp = (s->eKinetic / s->atoms->nGlobal) / kB_eV / 1.5;
     // scale the velocities to achieve the target temperature
     real_t scaleFactor = sqrt(temperature / temp);
@@ -310,8 +356,8 @@ void setTemperature_Consumer(SimFlat* s, real_t temperature) {
     // kinetic energy  = 3/2 kB * Temperature
     if (temperature == 0.0) return;
     real_t vZero[3] = {0., 0., 0.};
-    setVcm(s, vZero);
-    kineticEnergy(s);
+    setVcm_Consumer(s, vZero);
+    kineticEnergy_Consumer(s);
     real_t temp = (s->eKinetic / s->atoms->nGlobal) / kB_eV / 1.5;
     // scale the velocities to achieve the target temperature
     real_t scaleFactor = sqrt(temperature / temp);
@@ -386,7 +432,7 @@ void computeVcm_Producer(SimFlat* s, real_t vcm[3]) {
     }
 
     startTimer(commReduceTimer);
-    addRealParallel(vcmLocal, vcmSum, 4);
+    addRealParallel_Producer(vcmLocal, vcmSum, 4);
     stopTimer(commReduceTimer);
 
     real_t totalMass = vcmSum[3];
@@ -412,7 +458,7 @@ void computeVcm_Consumer(SimFlat* s, real_t vcm[3]) {
     }
 
     //startTimer(commReduceTimer);
-    addRealParallel(vcmLocal, vcmSum, 4);
+    addRealParallel_Consumer(vcmLocal, vcmSum, 4);
     //stopTimer(commReduceTimer);
 
     real_t totalMass = vcmSum[3];

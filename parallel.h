@@ -53,6 +53,8 @@ int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
 
 /// Wrapper for MPI_Allreduce integer sum.
 void addIntParallel(int* sendBuf, int* recvBuf, int count);
+void addIntParallel_Producer(int* sendBuf, int* recvBuf, int count);
+void addIntParallel_Consumer(int* sendBuf, int* recvBuf, int count);
 
 /// Wrapper for MPI_Allreduce real sum.
 void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count);

@@ -11,8 +11,6 @@ double timestep_Producer(SimFlat* s, int n, real_t dt);
 double timestep_Consumer(SimFlat* s, int n, real_t dt);
 
 void computeForce(SimFlat* s);
-void computeForce_Producer(SimFlat* s);
-void computeForce_Consumer(SimFlat* s);
 
 void kineticEnergy(SimFlat* s);
 void kineticEnergy_Producer(SimFlat* s);

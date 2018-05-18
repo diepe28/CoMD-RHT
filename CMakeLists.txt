@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(CoMDRHT)
 
-set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
-#set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
+#set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
+set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD 11)
 #-ftree-vectorize
 
 # mpi or not
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDO_MPI -DMPICH_IGNORE_CXX_SEEK")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDO_MPI -DMPICH_IGNORE_CXX_SEEK")
 
 # print output to console and files
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE -DPRINT_CMD=0")

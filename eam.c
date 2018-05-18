@@ -135,7 +135,7 @@ static void typeNotSupported(const char* callSite, const char* type);
 /// \param [in] dir   The directory in which potential table files are found.
 /// \param [in] file  The name of the potential table file.
 /// \param [in] type  The file format of the potential file (setfl or funcfl).
-struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type, ExecutionThread currentThread) {
+struct BasePotentialSt* initEamPot(const char* dir, const char* file, const char* type) {
     EamPotential *pot = comdMalloc(sizeof(EamPotential));
     assert(pot);
 
@@ -347,7 +347,6 @@ int eamForce_Producer(SimFlat* s) {
         pot->dfEmbed = comdMalloc(maxTotalAtoms * sizeof(real_t));
         pot->rhobar = comdMalloc(maxTotalAtoms * sizeof(real_t));
 
-        // TODO, not sure if must be replicated because we need a new structure, new memory
         pot->forceExchange = initForceHaloExchange(s->domain, s->boxes);
         pot->forceExchangeData = comdMalloc(sizeof(ForceExchangeData));
 
@@ -369,7 +368,7 @@ int eamForce_Producer(SimFlat* s) {
     RHT_Produce_Secure(size1);
     RHT_Produce_Secure(size2);
     RHT_Produce_Secure(size3);
-    RHT_Produce_Volatile(size3);
+    RHT_Produce_Volatile(size4);
 
     memset(s->atoms->f, 0, size1);
     memset(s->atoms->U, 0, size2);
@@ -381,15 +380,20 @@ int eamForce_Producer(SimFlat* s) {
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
         RHT_Produce_Secure(nIBox);
+
         int nNbrBoxes = getNeighborBoxes_Producer(s->boxes, iBox, nbrBoxes);
         RHT_Produce_Secure(nNbrBoxes);
 
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
+            RHT_Produce_Secure(jBox);
+
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
+            RHT_Produce_Secure(nJBox);
+
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
                 // loop over atoms in jBox
@@ -400,19 +404,24 @@ int eamForce_Producer(SimFlat* s) {
                     real3 dr;
                     for (int k = 0; k < 3; k++) {
                         dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        RHT_Produce_Secure(dr[k]);
                         r2 += dr[k] * dr[k];
+                        RHT_Produce_Secure(r2);
                     }
                     if (r2 > rCut2) continue;
 
                     double r = sqrt(r2);
+                    RHT_Produce_Secure(r);
 
                     real_t phiTmp, dPhi, rhoTmp, dRho;
                     interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    //printf("Producer pot->phi: %f  phiTmp: %f dPhi: %f \n",pot->phi, phiTmp, dPhi);
                     interpolate(pot->rho, r, &rhoTmp, &dRho);
 
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
                         s->atoms->f[jOff][k] += dPhi * dr[k] / r;
+                        RHT_Produce_Secure(s->atoms->f[jOff][k]);
                     }
 
                     // update energy terms
@@ -423,12 +432,18 @@ int eamForce_Producer(SimFlat* s) {
                     else
                         etot += 0.5 * phiTmp;
 
+                    RHT_Produce_Secure(etot);
+
                     s->atoms->U[iOff] += 0.5 * phiTmp;
                     s->atoms->U[jOff] += 0.5 * phiTmp;
+                    RHT_Produce_Secure(s->atoms->U[iOff]);
+                    RHT_Produce_Secure(s->atoms->U[jOff]);
 
                     // accumulate rhobar for each atom
                     pot->rhobar[iOff] += rhoTmp;
                     pot->rhobar[jOff] += rhoTmp;
+                    RHT_Produce_Secure(pot->rhobar[iOff]);
+                    RHT_Produce_Secure(pot->rhobar[jOff]);
 
                 } // loop over atoms in jBox
             } // loop over atoms in iBox
@@ -440,34 +455,45 @@ int eamForce_Producer(SimFlat* s) {
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int iOff;
         int nIBox = s->boxes->nAtoms[iBox];
+        RHT_Produce_Secure(nIBox);
 
         // loop over atoms in iBox
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
             real_t fEmbed, dfEmbed;
             interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
             pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
+            RHT_Produce_Secure(pot->dfEmbed[iOff]);
+
             etot += fEmbed;
+            RHT_Produce_Secure(etot);
+
             s->atoms->U[iOff] += fEmbed;
+            RHT_Produce_Secure(s->atoms->U[iOff]);
         }
     }
 
     // exchange derivative of the embedding energy with repsect to rhobar
     startTimer(eamHaloTimer);
-    haloExchange(pot->forceExchange, pot->forceExchangeData);
+    haloExchange_Producer(pot->forceExchange, pot->forceExchangeData);
     stopTimer(eamHaloTimer);
 
     // third pass
     // loop over local boxes
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
-        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        int nNbrBoxes = getNeighborBoxes_Producer(s->boxes, iBox, nbrBoxes);
+        RHT_Produce_Secure(nNbrBoxes);
 
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
+            RHT_Produce_Secure(jBox);
+
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
+            RHT_Produce_Secure(nJBox);
+
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
                 // loop over atoms in jBox
@@ -478,11 +504,14 @@ int eamForce_Producer(SimFlat* s) {
                     real3 dr;
                     for (int k = 0; k < 3; k++) {
                         dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        RHT_Produce_Secure(dr[k]);
                         r2 += dr[k] * dr[k];
+                        RHT_Produce_Secure(r2);
                     }
                     if (r2 >= rCut2) continue;
 
                     real_t r = sqrt(r2);
+                    RHT_Produce_Secure(r);
 
                     real_t rhoTmp, dRho;
                     interpolate(pot->rho, r, &rhoTmp, &dRho);
@@ -490,6 +519,7 @@ int eamForce_Producer(SimFlat* s) {
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
                         s->atoms->f[jOff][k] += (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                        RHT_Produce_Secure(s->atoms->f[jOff][k]);
                     }
 
                 } // loop over atoms in jBox
@@ -533,7 +563,7 @@ int eamForce_Consumer(SimFlat* s) {
     RHT_Consume_Check(size1);
     RHT_Consume_Check(size2);
     RHT_Consume_Check(size3);
-    RHT_Consume_Volatile(size3);
+    RHT_Consume_Volatile(size4);
 
     memset(s->atoms->f, 0, size1);
     memset(s->atoms->U, 0, size2);
@@ -551,9 +581,13 @@ int eamForce_Consumer(SimFlat* s) {
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
+            RHT_Consume_Check(jBox);
+
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
+            RHT_Consume_Check(nJBox);
+
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
                 // loop over atoms in jBox
@@ -564,19 +598,24 @@ int eamForce_Consumer(SimFlat* s) {
                     real3 dr;
                     for (int k = 0; k < 3; k++) {
                         dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        RHT_Consume_Check(dr[k]);
                         r2 += dr[k] * dr[k];
+                        RHT_Consume_Check(r2);
                     }
                     if (r2 > rCut2) continue;
 
                     double r = sqrt(r2);
+                    RHT_Consume_Check(r);
 
                     real_t phiTmp, dPhi, rhoTmp, dRho;
                     interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    //printf("Consumer pot->phi: %f  phiTmp: %f dPhi: %f \n", pot->phi, phiTmp, dPhi);
                     interpolate(pot->rho, r, &rhoTmp, &dRho);
 
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
                         s->atoms->f[jOff][k] += dPhi * dr[k] / r;
+                        RHT_Consume_Check(s->atoms->f[jOff][k]);
                     }
 
                     // update energy terms
@@ -587,12 +626,18 @@ int eamForce_Consumer(SimFlat* s) {
                     else
                         etot += 0.5 * phiTmp;
 
+                    RHT_Consume_Check(etot);
+
                     s->atoms->U[iOff] += 0.5 * phiTmp;
                     s->atoms->U[jOff] += 0.5 * phiTmp;
+                    RHT_Consume_Check(s->atoms->U[iOff]);
+                    RHT_Consume_Check(s->atoms->U[jOff]);
 
                     // accumulate rhobar for each atom
                     pot->rhobar[iOff] += rhoTmp;
                     pot->rhobar[jOff] += rhoTmp;
+                    RHT_Consume_Check(pot->rhobar[iOff]);
+                    RHT_Consume_Check(pot->rhobar[jOff]);
 
                 } // loop over atoms in jBox
             } // loop over atoms in iBox
@@ -604,33 +649,44 @@ int eamForce_Consumer(SimFlat* s) {
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int iOff;
         int nIBox = s->boxes->nAtoms[iBox];
+        RHT_Consume_Check(nIBox);
 
         // loop over atoms in iBox
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
             real_t fEmbed, dfEmbed;
             interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
             pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
+            RHT_Consume_Check(pot->dfEmbed[iOff]);
+
             etot += fEmbed;
+            RHT_Consume_Check(etot);
+
             s->atoms->U[iOff] += fEmbed;
+            RHT_Consume_Check(s->atoms->U[iOff]);
         }
     }
 
+
     // exchange derivative of the embedding energy with repsect to rhobar
-    startTimer(eamHaloTimer);
-    haloExchange(pot->forceExchange, pot->forceExchangeData);
-    stopTimer(eamHaloTimer);
+    haloExchange_Consumer(pot->forceExchange, pot->forceExchangeData);
 
     // third pass
     // loop over local boxes
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
-        int nNbrBoxes = getNeighborBoxes(s->boxes, iBox, nbrBoxes);
+        int nNbrBoxes = getNeighborBoxes_Consumer(s->boxes, iBox, nbrBoxes);
+        RHT_Consume_Check(nNbrBoxes);
+
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
+            RHT_Consume_Check(jBox);
+
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
+            RHT_Consume_Check(nJBox);
+
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
                 // loop over atoms in jBox
@@ -641,11 +697,14 @@ int eamForce_Consumer(SimFlat* s) {
                     real3 dr;
                     for (int k = 0; k < 3; k++) {
                         dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
+                        RHT_Consume_Check(dr[k]);
                         r2 += dr[k] * dr[k];
+                        RHT_Consume_Check(r2);
                     }
                     if (r2 >= rCut2) continue;
 
                     real_t r = sqrt(r2);
+                    RHT_Consume_Check(r);
 
                     real_t rhoTmp, dRho;
                     interpolate(pot->rho, r, &rhoTmp, &dRho);
@@ -653,6 +712,7 @@ int eamForce_Consumer(SimFlat* s) {
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
                         s->atoms->f[jOff][k] += (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
+                        RHT_Consume_Check(s->atoms->f[jOff][k]);
                     }
 
                 } // loop over atoms in jBox
@@ -695,37 +755,70 @@ void eamDestroy(BasePotential** pPot)
 /// Broadcasts an EamPotential from rank 0 to all other ranks.
 /// If the table coefficients are read from a file only rank 0 does the
 /// read.  Hence we need to broadcast the potential to all other ranks.
-void eamBcastPotential(EamPotential* pot)
-{
-   assert(pot);
-   
-   struct 
-   {
-      real_t cutoff, mass, lat;
-      char latticeType[8];
-      char name[3];
-      int atomicNo;
-   } buf;
-   if (getMyRank() == 0)
-   {
-      buf.cutoff   = pot->cutoff;
-      buf.mass     = pot->mass;
-      buf.lat      = pot->lat;
-      buf.atomicNo = pot->atomicNo;
-      strcpy(buf.latticeType, pot->latticeType);
-      strcpy(buf.name, pot->name);
-   }
-   bcastParallel(&buf, sizeof(buf), 0);
-   pot->cutoff   = buf.cutoff;
-   pot->mass     = buf.mass;
-   pot->lat      = buf.lat;
-   pot->atomicNo = buf.atomicNo;
-   strcpy(pot->latticeType, buf.latticeType);
-   strcpy(pot->name, buf.name);
 
-   bcastInterpolationObject(&pot->phi);
-   bcastInterpolationObject(&pot->rho);
-   bcastInterpolationObject(&pot->f);
+typedef struct {
+    real_t cutoff, mass, lat;
+    char latticeType[8];
+    char name[3];
+    int atomicNo;
+} buf_eamB;
+
+buf_eamB bufConsumer;
+volatile int dataToConsumerReader = 0;
+
+void eamBcastPotential(EamPotential* pot) {
+    assert(pot);
+    buf_eamB buf;
+
+    if (getMyRank() == 0) {
+        buf.cutoff = pot->cutoff;
+        buf.mass = pot->mass;
+        buf.lat = pot->lat;
+        buf.atomicNo = pot->atomicNo;
+        strcpy(buf.latticeType, pot->latticeType);
+        strcpy(buf.name, pot->name);
+    }
+    if(currentThread != ConsumerThread)
+        bcastParallel(&buf, sizeof(buf), 0);
+
+    // dperez, this code was added
+    // after this points all producers have the data, it must be sent to consumer
+    if(currentThread == ProducerThread){
+        bufConsumer.cutoff = buf.cutoff;
+        bufConsumer.mass = buf.mass;
+        bufConsumer.lat = buf.lat;
+        bufConsumer.atomicNo = buf.atomicNo;
+        strcpy(bufConsumer.latticeType, buf.latticeType);
+        strcpy(bufConsumer.name, buf.name);
+        dataToConsumerReader = 1;
+//        printf("Producer: cutoff: %f, mass: %f, lat: %f, atomic: %d, type: %s name: %s \n",
+//               buf.cutoff, buf.mass, buf.lat, buf.atomicNo, buf.latticeType,buf.name
+//        );
+    }else if(currentThread == ConsumerThread){
+        while(dataToConsumerReader == 0) asm("pause");
+        buf.cutoff = bufConsumer.cutoff;
+        buf.mass = bufConsumer.mass;
+        buf.lat = bufConsumer.lat;
+        buf.atomicNo = bufConsumer.atomicNo;
+        strcpy(buf.latticeType, bufConsumer.latticeType);
+        strcpy(buf.name, bufConsumer.name);
+        dataToConsumerReader = 0;
+//        printf("Consumer: cutoff: %f, mass: %f, lat: %f, atomic: %d, type: %s name: %s \n",
+//               buf.cutoff, buf.mass, buf.lat, buf.atomicNo, buf.latticeType,buf.name
+//        );
+    }
+
+    pot->cutoff = buf.cutoff;
+    pot->mass = buf.mass;
+    pot->lat = buf.lat;
+    pot->atomicNo = buf.atomicNo;
+    strcpy(pot->latticeType, buf.latticeType);
+    strcpy(pot->name, buf.name);
+
+    bcastInterpolationObject(&pot->phi);
+    bcastInterpolationObject(&pot->rho);
+    bcastInterpolationObject(&pot->f);
+
 }
 
 /// Builds a structure to store interpolation data for a tabular
@@ -830,35 +923,84 @@ void interpolate(InterpolationObject* table, real_t r, real_t* f, real_t* df) {
 /// eliminates the need to put broadcast code in multiple table readers.
 ///
 /// \see eamBcastPotential
-void bcastInterpolationObject(InterpolationObject** table)
-{
-   struct
-   {
-      int n;
-      real_t x0, invDx;
-   } buf;
 
-   if (getMyRank() == 0)
-   {
-      buf.n     = (*table)->n;
-      buf.x0    = (*table)->x0;
-      buf.invDx = (*table)->invDx;
-   }
-   bcastParallel(&buf, sizeof(buf), 0);
+typedef struct {
+    int n;
+    real_t x0, invDx;
+} buf_interpolation;
 
-   if (getMyRank() != 0)
-   {
-      assert(*table == NULL);
-      *table = comdMalloc(sizeof(InterpolationObject));
-      (*table)->n      = buf.n;
-      (*table)->x0     = buf.x0;
-      (*table)->invDx  = buf.invDx;
-      (*table)->values = comdMalloc(sizeof(real_t) * (buf.n+3) );
-      (*table)->values++;
-   }
-   
-   int valuesSize = sizeof(real_t) * ((*table)->n+3);
-   bcastParallel((*table)->values-1, valuesSize, 0);
+buf_interpolation bufInterpolation_consumer;
+volatile int isBufInterpolationReady = 0;
+real_t* table_values_consumer = 0;
+volatile int isTableValuesReady = 0;
+
+void bcastInterpolationObject(InterpolationObject** table) {
+
+    buf_interpolation buf;
+
+    if (getMyRank() == 0) {
+        buf.n = (*table)->n;
+        buf.x0 = (*table)->x0;
+        buf.invDx = (*table)->invDx;
+    }
+
+    if(currentThread != ConsumerThread)
+        bcastParallel(&buf, sizeof(buf), 0);
+
+    if(currentThread == ProducerThread){
+        //dperez, must send data to consumer
+        while (isBufInterpolationReady == 1) asm("pause");
+
+        bufInterpolation_consumer.n = buf.n;
+        bufInterpolation_consumer.x0 = buf.x0;
+        bufInterpolation_consumer.invDx = buf.invDx;
+        isBufInterpolationReady = 1;
+    }else if(currentThread == ConsumerThread){
+        while (isBufInterpolationReady == 0) asm("pause");
+
+        buf.n = bufInterpolation_consumer.n;
+        buf.x0 = bufInterpolation_consumer.x0;
+        buf.invDx = bufInterpolation_consumer.invDx;
+        isBufInterpolationReady = 0;
+    }
+
+    if (getMyRank() != 0) {
+        assert(*table == NULL);
+        *table = comdMalloc(sizeof(InterpolationObject));
+        (*table)->n = buf.n;
+        (*table)->x0 = buf.x0;
+        (*table)->invDx = buf.invDx;
+        (*table)->values = comdMalloc(sizeof(real_t) * (buf.n + 3));
+        (*table)->values++;
+    }
+
+    int valuesSize = sizeof(real_t) * ((*table)->n + 3);
+
+    if(currentThread != ConsumerThread)
+        bcastParallel((*table)->values - 1, valuesSize, 0);
+
+    // dperez added
+    if(currentThread == ProducerThread) {
+        while(isTableValuesReady == 1) asm("pause");
+        (*table)->values--;
+        table_values_consumer = comdMalloc(sizeof(real_t) * (buf.n + 3));
+        for(int i = 0; i < (buf.n + 3); i++){
+            table_values_consumer[i] = (*table)->values[i];
+        }
+        (*table)->values++;
+        isTableValuesReady = 1;
+
+    }else if(currentThread == ConsumerThread){
+        while(isTableValuesReady == 0) asm("pause");
+
+        (*table)->values--;
+        for(int i = 0; i < (buf.n + 3); i++){
+            (*table)->values[i] = table_values_consumer[i];
+        }
+        (*table)->values++;
+        isTableValuesReady = 0;
+    }
+
 }
 
 void printTableData(InterpolationObject* table, const char* fileName)

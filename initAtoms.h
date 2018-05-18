@@ -35,6 +35,8 @@ void createFccLattice_Producer(int nx, int ny, int nz, real_t lat, struct SimFla
 void createFccLattice_Consumer(int nx, int ny, int nz, real_t lat, struct SimFlatSt* s);
 
 void setVcm(struct SimFlatSt* s, real_t vcm[3]);
+void setVcm_Producer(struct SimFlatSt* s, real_t vcm[3]);
+void setVcm_Consumer(struct SimFlatSt* s, real_t vcm[3]);
 
 void setTemperature(struct SimFlatSt* s, real_t temperature);
 void setTemperature_Producer(struct SimFlatSt* s, real_t temperature);

@@ -65,7 +65,9 @@
 #define REDIRECT_OUTPUT 0
 #define   MIN(A,B) ((A) < (B) ? (A) : (B))
 
-static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread);
+static SimFlat* initSimulation(Command cmd);
+static SimFlat* initSimulation_Producer(Command cmd);
+static SimFlat* initSimulation_Consumer(Command cmd);
 
 static void destroySimulation(SimFlat** ps);
 
@@ -73,7 +75,7 @@ static void initSubsystems(void);
 static void finalizeSubsystems(void);
 
 static BasePotential* initPotential(
-   int doeam, const char* potDir, const char* potName, const char* potType, ExecutionThread currentThread);
+   int doeam, const char* potDir, const char* potName, const char* potType);
 static SpeciesData* initSpecies(BasePotential* pot);
 static Validate* initValidate(SimFlat* s);
 static Validate* initValidate_Producer(SimFlat* s);
@@ -97,31 +99,35 @@ typedef struct {
     Command* command;
 } ConsumerParams;
 
+// TODO, pots must be in folder of executable
+// TODO, do not know why but when I modify the -k param it fails at the 3rd run (of the not replicated app)
+// and it does not fails for every problem size it fail for 15 15 10
 int main(int argc, char** argv) {
     // Prolog
     initParallel(&argc, &argv);
+    currentThread = NotReplicatedThread;
 
+    //todo, to exactly same results on every run
     //TimersNew();
 
     profileStart(totalTimer);
     initSubsystems();
     timestampBarrier("Starting Initialization\n");
-    currentThread = ProducerThread;
 
     int replicated = 0, numRuns = 1, numThreads, producerCore = 0, consumerCore = 3;
     double times = 0, currentElapsed;
 
     yamlAppInfo(yamlFile);
+
 #if DPRINT_CMD == 1
     yamlAppInfo(screenOut);
 #endif
 
-    if(myRank == 0)
+    if (myRank == 0)
         printf("\n-------- Will execute the ");
 
-    if(argc > 15) {
+    if (argc > 15) {
         replicated = 1;
-
         //-e -i 1 -j 1 -k 1 -x 5 -y 5 -z 5 3 2 1 3, the last 4 params are ours, is 2 + numThreads
 
         numRuns = atoi(argv[14]);
@@ -130,37 +136,45 @@ int main(int argc, char** argv) {
         producerCore = atoi(argv[myRank * 2 + 16]);
         consumerCore = atoi(argv[myRank * 2 + 17]);
 
-        printf("Replicated version -- Cores: %d,%d --", producerCore, consumerCore);
-        argc -= (numThreads + 2); //numThreads
-    }else{
-        printf("NOT Replicated version %d,%d -- ", producerCore, consumerCore);
+        if(myRank == 0)
+            printf("Replicated version -- Cores: %d,%d --", producerCore, consumerCore);
+    } else {
+        if (myRank == 0)
+            printf("NOT Replicated version %d,%d -- ", producerCore, consumerCore);
         numRuns = atoi(argv[14]);
-        argc--;
     }
 
-    printf(" %d times\n\n", numRuns);
+    if(myRank == 0)
+        printf(" %d times\n\n", numRuns);
 
-    Command cmd = parseCommandLine(argc, argv);
+    Command cmd;
+    if(replicated) {
+        cmd = parseCommandLine(argc - (numThreads + 2), argv); // numRuns, numThread and all core numbers
+    }else{
+        cmd = parseCommandLine(argc - 1, argv); // numRuns
+    }
+
     printCmdYaml(yamlFile, &cmd);
+
 #if DPRINT_CMD == 1
     printCmdYaml(screenOut, &cmd);
 #endif
 
-    if(replicated){
+    if (replicated) {
         SetThreadAffinity(producerCore);
-
+        currentThread = ProducerThread;
         ConsumerParams *consumerParams;
 
         for (int iterator = 0; iterator < numRuns; iterator++) {
             RHT_Replication_Init(0);
-            consumerParams = (ConsumerParams*) malloc(sizeof(ConsumerParams));
+            consumerParams = (ConsumerParams *) malloc(sizeof(ConsumerParams));
 
             consumerParams->command = &cmd;
             consumerParams->executionCore = consumerCore;
 
             pthread_t myThread;
-
-            int err = pthread_create(&myThread, NULL, (void *(*)(void *)) consumer_thread_func, (void *) consumerParams);
+            int err = pthread_create(&myThread, NULL, (void *(*)(void *)) consumer_thread_func,
+                                     (void *) consumerParams);
 
             if (err) {
                 fprintf(stderr, "Fail creating thread %d\n", 1);
@@ -171,7 +185,7 @@ int main(int argc, char** argv) {
             pthread_join(myThread, NULL);
 
             if (myRank == 0) {
-                printf("Actual Walltime[%d] in seconds: %f \n", iterator,  currentElapsed);
+                printf("Actual Walltime[%d] in seconds: %f \n", iterator, currentElapsed);
                 times += currentElapsed;
             }
 
@@ -182,17 +196,17 @@ int main(int argc, char** argv) {
             RHT_Replication_Finish();
         }
 
-        if(myRank == 0) {
+        if (myRank == 0) {
             printf("\n -------- Summary Replicated Version ----------- \n");
             printf("Mean time in seconds: %f \n\n", times / numRuns);
         }
 
-    }else {
+    } else {
         for (int iterator = 0; iterator < numRuns; iterator++) {
             currentElapsed = mainExecution(&cmd);
 
             if (myRank == 0) {
-                printf("Baseline - Walltime[%d] in seconds: %f \n", iterator,  currentElapsed);
+                printf("Baseline - Walltime[%d] in seconds: %f \n", iterator, currentElapsed);
                 times += currentElapsed;
 
 //                TimersFree();
@@ -200,7 +214,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        if(myRank == 0) {
+        if (myRank == 0) {
             printf("\n -------- Summary Baseline ----------- \n");
             printf("Mean time in seconds: %f \n\n", times / numRuns);
         }
@@ -213,7 +227,7 @@ int main(int argc, char** argv) {
 double mainExecution(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
-    SimFlat *sim = initSimulation((*cmd), NotReplicatedThread);
+    SimFlat *sim = initSimulation((*cmd));
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
@@ -221,7 +235,6 @@ double mainExecution(Command *cmd) {
 
     Validate *validate = initValidate(sim); // atom counts, energy
     timestampBarrier("Initialization Finished\n");
-
     timestampBarrier("Starting simulation\n");
 
     //dperez, here is where the timer of the actual replicated execution starts...
@@ -281,18 +294,15 @@ double mainExecution(Command *cmd) {
 double mainExecution_producer(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
-    //SimFlat *sim = initSimulation_Producer((*cmd));
-    SimFlat *sim = initSimulation((*cmd), ProducerThread);
+    SimFlat *sim = initSimulation_Producer((*cmd));
 
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
     printSimulationDataYaml(screenOut, sim);
 #endif
 
-    //Validate *validate = initValidate_Producer(sim); // atom counts, energy
-    Validate *validate = initValidate(sim); // atom counts, energy
+    Validate *validate = initValidate_Producer(sim); // atom counts, energy
     timestampBarrier("Initialization Finished\n");
-
     timestampBarrier("Starting simulation\n");
 
     //dperez, here is where the timer of the actual replicated execution starts...
@@ -361,12 +371,9 @@ void consumer_thread_func(void *args) {
     SetThreadAffinity(params->executionCore);
 
     currentThread = ConsumerThread;
+    SimFlat *sim = initSimulation_Consumer((*cmd));
 
-    SimFlat *sim = initSimulation((*cmd), ConsumerThread);
-    //SimFlat *sim = initSimulation_Consumer((*cmd));
-
-    //Validate *validate = initValidate_Consumer(sim); // atom counts, energy
-    Validate *validate = initValidate(sim); // atom counts, energy
+    Validate *validate = initValidate_Consumer(sim); // atom counts, energy
 
     // This is the CoMD main loop
     const int nSteps = sim->nSteps;
@@ -396,7 +403,7 @@ void consumer_thread_func(void *args) {
 /// Initialization order is set by the natural dependencies of the
 /// substructure such as the atoms need the link cells so the link cells
 /// must be initialized before the atoms.
-static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread) {
+static SimFlat* initSimulation(Command cmd) {
     SimFlat *sim = comdMalloc(sizeof(SimFlat));
     sim->nSteps = cmd.nSteps;
     sim->printRate = cmd.printRate;
@@ -408,7 +415,7 @@ static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread) {
     sim->eKinetic = 0.0;
     sim->atomExchange = NULL;
 
-    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType, currentThread);
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
     real_t latticeConstant = cmd.lat;
     if (cmd.lat < 0.0)
         latticeConstant = sim->pot->lat;
@@ -430,8 +437,10 @@ static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread) {
     sim->atoms = initAtoms(sim->boxes);
 
     // create lattice with desired temperature and displacement.
+
     createFccLattice(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
     setTemperature(sim, cmd.temperature);
+
     randomDisplacements(sim, cmd.initialDelta);
 
     sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
@@ -448,6 +457,111 @@ static SimFlat* initSimulation(Command cmd, ExecutionThread currentThread) {
     stopTimer(computeForceTimer);
 
     kineticEnergy(sim);
+
+    return sim;
+}
+
+static SimFlat* initSimulation_Producer(Command cmd) {
+    SimFlat *sim = comdMalloc(sizeof(SimFlat));
+    sim->nSteps = cmd.nSteps;
+    sim->printRate = cmd.printRate;
+    sim->dt = cmd.dt;
+    sim->domain = NULL;
+    sim->boxes = NULL;
+    sim->atoms = NULL;
+    sim->ePotential = 0.0;
+    sim->eKinetic = 0.0;
+    sim->atomExchange = NULL;
+
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
+
+    real_t latticeConstant = cmd.lat;
+    if (cmd.lat < 0.0)
+        latticeConstant = sim->pot->lat;
+
+    // ensure input parameters make sense.
+    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
+
+    sim->species = initSpecies(sim->pot);
+
+    real3 globalExtent;
+    globalExtent[0] = cmd.nx * latticeConstant;
+    globalExtent[1] = cmd.ny * latticeConstant;
+    globalExtent[2] = cmd.nz * latticeConstant;
+
+    sim->domain = initDecomposition(
+            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
+
+    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
+    sim->atoms = initAtoms(sim->boxes);
+
+    // create lattice with desired temperature and displacement.
+    createFccLattice_Producer(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
+    setTemperature_Producer(sim, cmd.temperature);
+    randomDisplacements(sim, cmd.initialDelta);
+
+    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
+
+    // Forces must be computed before we call the time stepper.
+    if (printRank())
+        startTimer(redistributeTimer);
+    redistributeAtoms_Producer(sim);
+    stopTimer(redistributeTimer);
+
+    startTimer(computeForceTimer);
+    computeForce(sim);
+    stopTimer(computeForceTimer);
+
+    kineticEnergy_Producer(sim);
+
+    return sim;
+}
+
+static SimFlat* initSimulation_Consumer(Command cmd) {
+    SimFlat *sim = comdMalloc(sizeof(SimFlat));
+    sim->nSteps = cmd.nSteps;
+    sim->printRate = cmd.printRate;
+    sim->dt = cmd.dt;
+    sim->domain = NULL;
+    sim->boxes = NULL;
+    sim->atoms = NULL;
+    sim->ePotential = 0.0;
+    sim->eKinetic = 0.0;
+    sim->atomExchange = NULL;
+
+    sim->pot = initPotential(cmd.doeam, cmd.potDir, cmd.potName, cmd.potType);
+    real_t latticeConstant = cmd.lat;
+    if (cmd.lat < 0.0)
+        latticeConstant = sim->pot->lat;
+
+    // ensure input parameters make sense.
+    sanityChecks(cmd, sim->pot->cutoff, latticeConstant, sim->pot->latticeType);
+
+    sim->species = initSpecies(sim->pot);
+
+    real3 globalExtent;
+    globalExtent[0] = cmd.nx * latticeConstant;
+    globalExtent[1] = cmd.ny * latticeConstant;
+    globalExtent[2] = cmd.nz * latticeConstant;
+
+    sim->domain = initDecomposition(
+            cmd.xproc, cmd.yproc, cmd.zproc, globalExtent);
+
+    sim->boxes = initLinkCells(sim->domain, sim->pot->cutoff);
+    sim->atoms = initAtoms(sim->boxes);
+
+    // create lattice with desired temperature and displacement.
+    createFccLattice_Consumer(cmd.nx, cmd.ny, cmd.nz, latticeConstant, sim);
+    setTemperature_Consumer(sim, cmd.temperature);
+    randomDisplacements(sim, cmd.initialDelta);
+
+    sim->atomExchange = initAtomHaloExchange(sim->domain, sim->boxes);
+
+    // Forces must be computed before we call the time stepper.
+    redistributeAtoms_Consumer(sim);
+    computeForce(sim);
+
+    kineticEnergy_Consumer(sim);
 
     return sim;
 }
@@ -489,11 +603,11 @@ void finalizeSubsystems(void) {
 
 /// decide whether to get LJ or EAM potentials
 BasePotential* initPotential(int doeam, const char* potDir, const char* potName,
-                             const char* potType, ExecutionThread currentThread) {
+                             const char* potType) {
     BasePotential *pot = NULL;
 
     if (doeam)
-        pot = initEamPot(potDir, potName, potType, currentThread);
+        pot = initEamPot(potDir, potName, potType);
     else
         pot = initLjPot();
     assert(pot);
@@ -602,7 +716,7 @@ void sumAtoms_Producer(SimFlat* s) {
     replicate_loop_producer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
 
     startTimer(commReduceTimer);
-    addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+    addIntParallel_Producer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
     stopTimer(commReduceTimer);
 }
 
@@ -613,7 +727,7 @@ void sumAtoms_Consumer(SimFlat* s) {
     replicate_loop_consumer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
 
     //startTimer(commReduceTimer);
-    addIntParallel(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
+    addIntParallel_Consumer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
     //stopTimer(commReduceTimer);
 }
 
@@ -716,50 +830,53 @@ void printSimulationDataYaml(FILE* file, SimFlat* s) {
 
 /// Check that the user input meets certain criteria.
 void sanityChecks(Command cmd, double cutoff, double latticeConst, char latticeType[8]) {
-   int failCode = 0;
+    int failCode = 0;
 
-   // Check that domain grid matches number of ranks. (fail code 1)
-   int nProcs = cmd.xproc * cmd.yproc * cmd.zproc;
-   if (nProcs != getNRanks()) {
-      failCode |= 1;
-      if (printRank())
-         fprintf(screenOut,
-                 "\nNumber of MPI ranks must match xproc * yproc * zproc\n");
-   }
+    // Check that domain grid matches number of ranks. (fail code 1)
+    int nProcs = cmd.xproc * cmd.yproc * cmd.zproc;
+    if (nProcs != getNRanks()) {
+        failCode |= 1;
+        if (printRank())
+            fprintf(screenOut,
+                    "\nNumber of MPI ranks must match xproc * yproc * zproc\n");
+    }
 
-   // Check whether simuation is too small (fail code 2)
-   double minx = 2 * cutoff * cmd.xproc;
-   double miny = 2 * cutoff * cmd.yproc;
-   double minz = 2 * cutoff * cmd.zproc;
-   double sizex = cmd.nx * latticeConst;
-   double sizey = cmd.ny * latticeConst;
-   double sizez = cmd.nz * latticeConst;
+    // Check whether simulation is too small (fail code 2)
+    double minx = 2 * cutoff * cmd.xproc;
+    double miny = 2 * cutoff * cmd.yproc;
+    double minz = 2 * cutoff * cmd.zproc;
+    double sizex = cmd.nx * latticeConst;
+    double sizey = cmd.ny * latticeConst;
+    double sizez = cmd.nz * latticeConst;
 
-   if (sizex < minx || sizey < miny || sizez < minz) {
-      failCode |= 2;
-      if (printRank())
-         fprintf(screenOut, "\nSimulation too small.\n"
-                         "  Increase the number of unit cells to make the simulation\n"
-                         "  at least (%3.2f, %3.2f. %3.2f) Ansgstroms in size\n",
-                 minx, miny, minz);
-   }
+    if (sizex < minx || sizey < miny || sizez < minz) {
+        failCode |= 2;
+        if (printRank())
+            fprintf(screenOut, "\nSimulation too small.\n"
+                            "  Increase the number of unit cells to make the simulation\n"
+                            "  at least (%3.2f, %3.2f. %3.2f) Ansgstroms in size\n",
+                    minx, miny, minz);
+    }
 
-   // Check for supported lattice structure (fail code 4)
-   if (strcasecmp(latticeType, "FCC") != 0) {
-      failCode |= 4;
-      if (printRank())
-         fprintf(screenOut,
-                 "\nOnly FCC Lattice type supported, not %s. Fatal Error.\n",
-                 latticeType);
-   }
-   int checkCode = failCode;
-   bcastParallel(&checkCode, sizeof(int), 0);
-   // This assertion can only fail if different tasks failed different
-   // sanity checks.  That should not be possible.
-   assert(checkCode == failCode);
+    // Check for supported lattice structure (fail code 4)
+    if (strcasecmp(latticeType, "FCC") != 0) {
+        failCode |= 4;
+        if (printRank())
+            fprintf(screenOut,
+                    "\nOnly FCC Lattice type supported, not %s. Fatal Error.\n",
+                    latticeType);
+    }
 
-   if (failCode != 0)
-      exit(failCode);
+    int checkCode = failCode;
+    if(currentThread != ConsumerThread)
+        bcastParallel(&checkCode, sizeof(int), 0);
+    // This assertion can only fail if different tasks failed different
+    // sanity checks.  That should not be possible.
+    assert(checkCode == failCode);
+
+    if (failCode != 0) {
+        exit(failCode);
+    }
 }
 
 // --------------------------------------------------------------

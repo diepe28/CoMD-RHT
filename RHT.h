@@ -393,7 +393,6 @@ static INLINE double AlreadyConsumed_Consume() {
     while (fequal(globalQueue.content[globalQueue.deqPtr], ALREADY_CONSUMED)) {
         //asm("pause");
     }
-
     double value = globalQueue.content[globalQueue.deqPtr];
     consumer_move_next()
     return value;

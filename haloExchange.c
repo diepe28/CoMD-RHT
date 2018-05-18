@@ -514,46 +514,74 @@ void destroyAtomsExchange(void* vparms)
 ///
 /// \see initLinkCells for information about the conventions for grid
 /// coordinates of link cells.
-int* mkForceSendCellList(LinkCell* boxes, int face, int nCells)
-{
-   int* list = comdMalloc(nCells*sizeof(int));
-   int xBegin, xEnd, yBegin, yEnd, zBegin, zEnd;
+int* mkForceSendCellList(LinkCell* boxes, int face, int nCells) {
+    int *list = comdMalloc(nCells * sizeof(int));
+    int xBegin, xEnd, yBegin, yEnd, zBegin, zEnd;
 
-   int nx = boxes->gridSize[0];
-   int ny = boxes->gridSize[1];
-   int nz = boxes->gridSize[2];
-   switch(face)
-   {
-     case HALO_X_MINUS:
-      xBegin=0;    xEnd=1;    yBegin=0;    yEnd=ny;   zBegin=0;    zEnd=nz;
-      break;
-     case HALO_X_PLUS:
-      xBegin=nx-1; xEnd=nx;   yBegin=0;    yEnd=ny;   zBegin=0;    zEnd=nz;
-      break;
-     case HALO_Y_MINUS:
-      xBegin=-1;   xEnd=nx+1; yBegin=0;    yEnd=1;    zBegin=0;    zEnd=nz;
-      break;
-     case HALO_Y_PLUS:
-      xBegin=-1;   xEnd=nx+1; yBegin=ny-1; yEnd=ny;   zBegin=0;    zEnd=nz;
-      break;
-     case HALO_Z_MINUS:
-      xBegin=-1;   xEnd=nx+1; yBegin=-1;   yEnd=ny+1; zBegin=0;    zEnd=1;
-      break;
-     case HALO_Z_PLUS:
-      xBegin=-1;   xEnd=nx+1; yBegin=-1;   yEnd=ny+1; zBegin=nz-1; zEnd=nz;
-      break;
-     default:
-      assert(1==0);
-   }
-   
-   int count = 0;
-   for (int ix=xBegin; ix<xEnd; ++ix)
-      for (int iy=yBegin; iy<yEnd; ++iy)
-         for (int iz=zBegin; iz<zEnd; ++iz)
-            list[count++] = getBoxFromTuple(boxes, ix, iy, iz);
-   
-   assert(count == nCells);
-   return list;
+    int nx = boxes->gridSize[0];
+    int ny = boxes->gridSize[1];
+    int nz = boxes->gridSize[2];
+    switch (face) {
+        case HALO_X_MINUS:
+            xBegin = 0;
+            xEnd = 1;
+            yBegin = 0;
+            yEnd = ny;
+            zBegin = 0;
+            zEnd = nz;
+            break;
+        case HALO_X_PLUS:
+            xBegin = nx - 1;
+            xEnd = nx;
+            yBegin = 0;
+            yEnd = ny;
+            zBegin = 0;
+            zEnd = nz;
+            break;
+        case HALO_Y_MINUS:
+            xBegin = -1;
+            xEnd = nx + 1;
+            yBegin = 0;
+            yEnd = 1;
+            zBegin = 0;
+            zEnd = nz;
+            break;
+        case HALO_Y_PLUS:
+            xBegin = -1;
+            xEnd = nx + 1;
+            yBegin = ny - 1;
+            yEnd = ny;
+            zBegin = 0;
+            zEnd = nz;
+            break;
+        case HALO_Z_MINUS:
+            xBegin = -1;
+            xEnd = nx + 1;
+            yBegin = -1;
+            yEnd = ny + 1;
+            zBegin = 0;
+            zEnd = 1;
+            break;
+        case HALO_Z_PLUS:
+            xBegin = -1;
+            xEnd = nx + 1;
+            yBegin = -1;
+            yEnd = ny + 1;
+            zBegin = nz - 1;
+            zEnd = nz;
+            break;
+        default:
+            assert(1 == 0);
+    }
+
+    int count = 0;
+    for (int ix = xBegin; ix < xEnd; ++ix)
+        for (int iy = yBegin; iy < yEnd; ++iy)
+            for (int iz = zBegin; iz < zEnd; ++iz)
+                list[count++] = getBoxFromTuple(boxes, ix, iy, iz);
+
+    assert(count == nCells);
+    return list;
 }
 
 /// Make a list of link cells that need to receive data across the

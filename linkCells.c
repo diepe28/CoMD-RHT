@@ -91,34 +91,32 @@ static void getTuple(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
 static void getTuple_Producer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
 static void getTuple_Consumer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp);
 
-LinkCell* initLinkCells(const Domain* domain, real_t cutoff)
-{
-   assert(domain);
-   LinkCell* ll = comdMalloc(sizeof(LinkCell));
+LinkCell* initLinkCells(const Domain* domain, real_t cutoff) {
+    assert(domain);
+    LinkCell *ll = comdMalloc(sizeof(LinkCell));
 
-   for (int i = 0; i < 3; i++)
-   {
-      ll->localMin[i] = domain->localMin[i];
-      ll->localMax[i] = domain->localMax[i];
-      ll->gridSize[i] = domain->localExtent[i] / cutoff; // local number of boxes
-      ll->boxSize[i] = domain->localExtent[i] / ((real_t) ll->gridSize[i]);
-      ll->invBoxSize[i] = 1.0/ll->boxSize[i];
-   }
+    for (int i = 0; i < 3; i++) {
+        ll->localMin[i] = domain->localMin[i];
+        ll->localMax[i] = domain->localMax[i];
+        ll->gridSize[i] = domain->localExtent[i] / cutoff; // local number of boxes
+        ll->boxSize[i] = domain->localExtent[i] / ((real_t) ll->gridSize[i]);
+        ll->invBoxSize[i] = 1.0 / ll->boxSize[i];
+    }
 
-   ll->nLocalBoxes = ll->gridSize[0] * ll->gridSize[1] * ll->gridSize[2];
-   
-   ll->nHaloBoxes = 2 * ((ll->gridSize[0] + 2) *
-                         (ll->gridSize[1] + ll->gridSize[2] + 2) +
-                         (ll->gridSize[1] * ll->gridSize[2]));
+    ll->nLocalBoxes = ll->gridSize[0] * ll->gridSize[1] * ll->gridSize[2];
 
-   ll->nTotalBoxes = ll->nLocalBoxes + ll->nHaloBoxes;
-   
-   ll->nAtoms = comdMalloc(ll->nTotalBoxes*sizeof(int));
-   for (int iBox=0; iBox<ll->nTotalBoxes; ++iBox)
-      ll->nAtoms[iBox] = 0;
+    ll->nHaloBoxes = 2 * ((ll->gridSize[0] + 2) *
+                          (ll->gridSize[1] + ll->gridSize[2] + 2) +
+                          (ll->gridSize[1] * ll->gridSize[2]));
 
-   assert ( (ll->gridSize[0] >= 2) && (ll->gridSize[1] >= 2) && (ll->gridSize[2] >= 2) );
-   return ll;
+    ll->nTotalBoxes = ll->nLocalBoxes + ll->nHaloBoxes;
+
+    ll->nAtoms = comdMalloc(ll->nTotalBoxes * sizeof(int));
+    for (int iBox = 0; iBox < ll->nTotalBoxes; ++iBox)
+        ll->nAtoms[iBox] = 0;
+
+    assert ((ll->gridSize[0] >= 2) && (ll->gridSize[1] >= 2) && (ll->gridSize[2] >= 2));
+    return ll;
 }
 
 void destroyLinkCells(LinkCell** boxes)
@@ -139,31 +137,30 @@ void destroyLinkCells(LinkCell** boxes)
 /// list (as neighbor 13).  Caller is responsible to alloc and free
 /// nbrBoxes.
 /// \return The number of nbr boxes (always 27 in this implementation).
-int getNeighborBoxes(LinkCell* boxes, int iBox, int* nbrBoxes)
-{
-   int ix, iy, iz;
-   getTuple(boxes, iBox, &ix, &iy, &iz);
-   
-   int count = 0;
-   for (int i=ix-1; i<=ix+1; i++)
-      for (int j=iy-1; j<=iy+1; j++)
-         for (int k=iz-1; k<=iz+1; k++)
-            nbrBoxes[count++] = getBoxFromTuple(boxes,i,j,k);
-   
-   return count;
+int getNeighborBoxes(LinkCell* boxes, int iBox, int* nbrBoxes) {
+    int ix, iy, iz;
+    getTuple(boxes, iBox, &ix, &iy, &iz);
+
+    int count = 0;
+    for (int i = ix - 1; i <= ix + 1; i++)
+        for (int j = iy - 1; j <= iy + 1; j++)
+            for (int k = iz - 1; k <= iz + 1; k++)
+                nbrBoxes[count++] = getBoxFromTuple(boxes, i, j, k);
+
+    return count;
 }
 
-int getNeighborBoxes_Producer(LinkCell* boxes, int iBox, int* nbrBoxes)
-{
+int getNeighborBoxes_Producer(LinkCell* boxes, int iBox, int* nbrBoxes) {
     int ix, iy, iz;
     getTuple_Producer(boxes, iBox, &ix, &iy, &iz);
 
     int count = 0;
-    for (int i=ix-1; i<=ix+1; i++)
-        for (int j=iy-1; j<=iy+1; j++) {
-            for (int k=iz-1; k<=iz+1; k++) {
+    for (int i = ix - 1; i <= ix + 1; i++)
+        for (int j = iy - 1; j <= iy + 1; j++) {
+            for (int k = iz - 1; k <= iz + 1; k++) {
+                //nbrBoxes[count++] = getBoxFromTuple_Producer(boxes, i, j, k);
                 nbrBoxes[count++] = getBoxFromTuple(boxes, i, j, k);
-                RHT_Produce_Secure(nbrBoxes[count-1]);
+                RHT_Produce_Secure(nbrBoxes[count - 1]);
             }
         }
 
@@ -179,6 +176,7 @@ int getNeighborBoxes_Consumer(LinkCell* boxes, int iBox, int* nbrBoxes)
     for (int i=ix-1; i<=ix+1; i++)
         for (int j=iy-1; j<=iy+1; j++)
             for (int k=iz-1; k<=iz+1; k++) {
+                //nbrBoxes[count++] = getBoxFromTuple_Consumer(boxes, i, j, k);
                 nbrBoxes[count++] = getBoxFromTuple(boxes, i, j, k);
                 RHT_Consume_Check(nbrBoxes[count-1]);
             }
@@ -200,29 +198,28 @@ int getNeighborBoxes_Consumer(LinkCell* boxes, int iBox, int* nbrBoxes)
 void putAtomInBox(LinkCell* boxes, Atoms* atoms,
                   const int gid, const int iType,
                   const real_t x,  const real_t y,  const real_t z,
-                  const real_t px, const real_t py, const real_t pz)
-{
-   real_t xyz[3] = {x,y,z};
-   
-   // Find correct box.
-   int iBox = getBoxFromCoord(boxes, xyz);
-   int iOff = iBox*MAXATOMS;
-   iOff += boxes->nAtoms[iBox];
-   
-   // assign values to array elements
-   if (iBox < boxes->nLocalBoxes)
-      atoms->nLocal++;
-   boxes->nAtoms[iBox]++;
-   atoms->gid[iOff] = gid;
-   atoms->iSpecies[iOff] = iType;
-   
-   atoms->r[iOff][0] = x;
-   atoms->r[iOff][1] = y;
-   atoms->r[iOff][2] = z;
-   
-   atoms->p[iOff][0] = px;
-   atoms->p[iOff][1] = py;
-   atoms->p[iOff][2] = pz;
+                  const real_t px, const real_t py, const real_t pz) {
+    real_t xyz[3] = {x, y, z};
+
+    // Find correct box.
+    int iBox = getBoxFromCoord(boxes, xyz);
+    int iOff = iBox * MAXATOMS;
+    iOff += boxes->nAtoms[iBox];
+
+    // assign values to array elements
+    if (iBox < boxes->nLocalBoxes)
+        atoms->nLocal++;
+    boxes->nAtoms[iBox]++;
+    atoms->gid[iOff] = gid;
+    atoms->iSpecies[iOff] = iType;
+
+    atoms->r[iOff][0] = x;
+    atoms->r[iOff][1] = y;
+    atoms->r[iOff][2] = z;
+
+    atoms->p[iOff][0] = px;
+    atoms->p[iOff][1] = py;
+    atoms->p[iOff][2] = pz;
 }
 
 /// Calculates the link cell index from the grid coords.  The valid

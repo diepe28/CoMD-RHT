@@ -74,12 +74,10 @@ double timestep_Producer(SimFlat* s, int nSteps, real_t dt) {
         stopTimer(positionTimer);
 
         startTimer(redistributeTimer);
-        // TODO, this part is not replicated for now because it has really tricky patterns
         redistributeAtoms_Producer(s);
         stopTimer(redistributeTimer);
 
         startTimer(computeForceTimer);
-        // TODO, where is compute force handler
         computeForce(s);
         stopTimer(computeForceTimer);
 
@@ -294,26 +292,26 @@ void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
 /// Calculates total kinetic and potential energy across all tasks.  The
 /// local potential energy is a by-product of the force routine.
 void kineticEnergy(SimFlat* s) {
-   real_t eLocal[2];
-   eLocal[0] = s->ePotential;
-   eLocal[1] = 0;
-   for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
-      for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
-         int iSpecies = s->atoms->iSpecies[iOff];
-         real_t invMass = 0.5 / s->species[iSpecies].mass;
-         eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
-                       s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
-                       s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
-      }
-   }
+    real_t eLocal[2];
+    eLocal[0] = s->ePotential;
+    eLocal[1] = 0;
+    for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t invMass = 0.5 / s->species[iSpecies].mass;
+            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
+        }
+    }
 
-   real_t eSum[2];
-   startTimer(commReduceTimer);
-   addRealParallel(eLocal, eSum, 2);
-   stopTimer(commReduceTimer);
+    real_t eSum[2];
+    startTimer(commReduceTimer);
+    addRealParallel(eLocal, eSum, 2);
+    stopTimer(commReduceTimer);
 
-   s->ePotential = eSum[0];
-   s->eKinetic = eSum[1];
+    s->ePotential = eSum[0];
+    s->eKinetic = eSum[1];
 }
 
 void kineticEnergy_Producer(SimFlat* s) {
@@ -322,9 +320,6 @@ void kineticEnergy_Producer(SimFlat* s) {
     eLocal[1] = 0;
     RHT_Produce_Secure(eLocal[0]);
     RHT_Produce_Secure(eLocal[1]);
-
-    globalQueue.enqIt = 0;
-    groupVarProducer = 0.0;
 
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int iOff = MAXATOMS * iBox, ii = 0;
@@ -367,9 +362,7 @@ void kineticEnergy_Consumer(SimFlat* s) {
     }
 
     real_t eSum[2];
-//    startTimer(commReduceTimer);
     addRealParallel_Consumer(eLocal, eSum, 2);
-//    stopTimer(commReduceTimer);
 
     s->ePotential = eSum[0];
     s->eKinetic = eSum[1];
@@ -403,8 +396,6 @@ void redistributeAtoms_Producer(SimFlat* sim) {
     updateLinkCells_Producer(sim->boxes, sim->atoms);
 
     startTimer(atomHaloTimer);
-    // TODO, a lot of memcpys that need to be validated (but what to validate?
-    // the mem address will be different in the replica, maybe just the size of mem to be copied)
     haloExchange_Producer(sim->atomExchange, sim);
     stopTimer(atomHaloTimer);
 
@@ -415,10 +406,7 @@ void redistributeAtoms_Producer(SimFlat* sim) {
 
 void redistributeAtoms_Consumer(SimFlat* sim) {
     updateLinkCells_Consumer(sim->boxes, sim->atoms);
-
-    startTimer(atomHaloTimer);
     haloExchange_Consumer(sim->atomExchange, sim);
-    stopTimer(atomHaloTimer);
 
     for (int ii = 0; ii < sim->boxes->nTotalBoxes; ++ii)
         sortAtomsInCell_Consumer(sim->atoms, sim->boxes, ii);

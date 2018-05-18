@@ -6,6 +6,7 @@
 /// equivalent single task behavior.
 
 #include "parallel.h"
+#include "RHT.h"
 
 #ifdef DO_MPI
 #include <mpi.h>
@@ -34,9 +35,8 @@ int getNRanks()
    return nRanks;
 }
 
-int getMyRank()   
-{
-   return myRank;
+int getMyRank() {
+    return myRank;
 }
 
 /// \details
@@ -44,7 +44,7 @@ int getMyRank()
 /// more complex.  It is also possible to suppress practically all
 /// output by causing this function to return 0 for all ranks.
 int printRank() {
-    if (myRank == 0 && currentThread == ProducerThread) return 1;
+    if (myRank == 0 && currentThread != ConsumerThread) return 1;
     return 0;
 }
 
@@ -76,6 +76,10 @@ void destroyParallel() {
 
 void barrierParallel() {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM  IN BARRIER PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
 }
@@ -116,6 +120,13 @@ int sendReceiveParallel_Producer(void* sendBuf, int sendLen, int dest,
                  MPI_COMM_WORLD, &status);
     MPI_Get_count(&status, MPI_BYTE, &bytesReceived);
 
+    //dperez, replication must send data to consumer
+    char * buffer = (char*) recvBuf;
+    for(int i = 0; i < recvLen; i++){
+        RHT_Produce_Secure((double)buffer[i]);
+    }
+    RHT_Produce_Secure(bytesReceived);
+
     return bytesReceived;
 #else
     assert(source == dest);
@@ -130,11 +141,17 @@ int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
                         void* recvBuf, int recvLen, int source) {
 #ifdef DO_MPI
     int bytesReceived;
-    MPI_Status status;
-    MPI_Sendrecv(sendBuf, sendLen, MPI_BYTE, dest, 0,
-                 recvBuf, recvLen, MPI_BYTE, source, 0,
-                 MPI_COMM_WORLD, &status);
-    MPI_Get_count(&status, MPI_BYTE, &bytesReceived);
+//    MPI_Status status;
+//    MPI_Sendrecv(sendBuf, sendLen, MPI_BYTE, dest, 0,
+//                 recvBuf, recvLen, MPI_BYTE, source, 0,
+//                 MPI_COMM_WORLD, &status);
+//    MPI_Get_count(&status, MPI_BYTE, &bytesReceived);
+    //dperez, replication must send data to consumer
+    char * buffer = (char*) recvBuf;
+    for(int i = 0; i < recvLen; i++){
+        buffer[i] = (char) RHT_Consume();
+    }
+    bytesReceived = RHT_Consume();
 
     return bytesReceived;
 #else
@@ -148,7 +165,37 @@ int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
 
 void addIntParallel(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM  IN ADD INT PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+#else
+    for (int ii=0; ii<count; ++ii)
+       recvBuf[ii] = sendBuf[ii];
+#endif
+}
+
+void addIntParallel_Producer(int* sendBuf, int* recvBuf, int count) {
+#ifdef DO_MPI
+    MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    // dperez, send data to consumer
+    for(int i = 0; i < count; i++){
+        RHT_Produce_Secure(recvBuf[i]);
+    }
+#else
+    for (int ii=0; ii<count; ++ii)
+       recvBuf[ii] = sendBuf[ii];
+#endif
+}
+
+void addIntParallel_Consumer(int* sendBuf, int* recvBuf, int count) {
+#ifdef DO_MPI
+    //MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+    // dperez, get data from producer
+    for(int i = 0; i < count; i++){
+        recvBuf[i] = RHT_Consume();
+    }
 #else
     for (int ii=0; ii<count; ++ii)
        recvBuf[ii] = sendBuf[ii];
@@ -157,6 +204,10 @@ void addIntParallel(int* sendBuf, int* recvBuf, int count) {
 
 void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM  IN ADD REAL PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
 #else
     for (int ii=0; ii<count; ++ii)
@@ -167,7 +218,11 @@ void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count) {
 void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
 #ifdef DO_MPI
     MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
-    // TODO, must send data to consumer
+
+    // dperez, send data to consumer
+    for(int i = 0; i < count; i++){
+        RHT_Produce_Secure(recvBuf[i]);
+    }
 #else
     for (int ii=0; ii<count; ++ii)
         recvBuf[ii] = sendBuf[ii];
@@ -177,7 +232,10 @@ void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
 void addRealParallel_Consumer(real_t* sendBuf, real_t* recvBuf, int count) {
 #ifdef DO_MPI
     //MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
-    // TODO, must get data from producer
+    // dperez, get data from producer
+    for(int i = 0; i < count; i++){
+        recvBuf[i] = RHT_Consume();
+    }
 #else
     for (int ii=0; ii<count; ++ii)
         recvBuf[ii] = sendBuf[ii];
@@ -186,6 +244,10 @@ void addRealParallel_Consumer(real_t* sendBuf, real_t* recvBuf, int count) {
 
 void addDoubleParallel(double* sendBuf, double* recvBuf, int count) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM  IN ADD DOUBLE PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #else
     for (int ii=0; ii<count; ++ii)
@@ -195,6 +257,10 @@ void addDoubleParallel(double* sendBuf, double* recvBuf, int count) {
 
 void maxIntParallel(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A MAX INT IN ADD INT PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 #else
     for (int ii=0; ii<count; ++ii)
@@ -205,6 +271,10 @@ void maxIntParallel(int* sendBuf, int* recvBuf, int count) {
 
 void minRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int count) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM IN MIN RANK DOUBLE PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE_INT, MPI_MINLOC, MPI_COMM_WORLD);
 #else
     for (int ii=0; ii<count; ++ii)
@@ -217,6 +287,10 @@ void minRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int
 
 void maxRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int count) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM MAX RANK DOUBLE PARALLEL \n\n\n");
+        exit(34);
+    }
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
 #else
     for (int ii=0; ii<count; ++ii)
@@ -230,7 +304,13 @@ void maxRankDoubleParallel(RankReduceData* sendBuf, RankReduceData* recvBuf, int
 /// \param [in] count Length of buf in bytes.
 void bcastParallel(void* buf, int count, int root) {
 #ifdef DO_MPI
+    if(currentThread == ConsumerThread){
+        printf("\n\n\nHERE IS A PROBLEM IN BCAST PARALLEL \n\n\n");
+        exit(34);
+    }
+
     MPI_Bcast(buf, count, MPI_BYTE, root, MPI_COMM_WORLD);
+
 #endif
 }
 
