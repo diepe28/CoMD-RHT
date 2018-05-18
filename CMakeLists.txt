@@ -83,7 +83,15 @@ set(FLAGS_USING_POINTERS_VG " ${FLAGS_USING_POINTERS} -DVAR_GROUPING=1")
 set(FLAGS_ALREADY_CONSUMED "${CMAKE_CXX_FLAGS} -DAPPROACH_ALREADY_CONSUMED=1")
 set(FLAGS_ALREADY_CONSUMED_VG " ${FLAGS_ALREADY_CONSUMED} -DVAR_GROUPING=1")
 
-# using new limit approach
+# using SRMT value flags
+set(FLAGS_SRMT "${CMAKE_CXX_FLAGS} -DAPPROACH_SRMT=1")
+set(FLAGS_SRMT_VG " ${FLAGS_SRMT} -DVAR_GROUPING=1")
+
+# using no sync consumer approachh
+set(FLAGS_NO_SYNC_CONSUMER "${CMAKE_CXX_FLAGS} -DAPPROACH_CONSUMER_NO_SYNC=1")
+set(FLAGS_NO_SYNC_CONSUMER_VG " ${FLAGS_NO_SYNC_CONSUMER} -DVAR_GROUPING=1")
+
+# using new limit approach (includes the previous)
 set(FLAGS_NEW_LIMIT "${CMAKE_CXX_FLAGS} -DAPPROACH_NEW_LIMIT=1")
 set(FLAGS_NEW_LIMIT_VG " ${FLAGS_NEW_LIMIT} -DVAR_GROUPING=1")
 
@@ -91,14 +99,23 @@ set(FLAGS_NEW_LIMIT_VG " ${FLAGS_NEW_LIMIT} -DVAR_GROUPING=1")
 set(FLAGS_NEW_LIMIT_INVERTED "${CMAKE_CXX_FLAGS} -DAPPROACH_WRITE_INVERTED_NEW_LIMIT=1")
 set(FLAGS_NEW_LIMIT_INVERTED_VG " ${FLAGS_NEW_LIMIT_INVERTED} -DVAR_GROUPING=1")
 
+
 # un comment the next lines to create multiple executables, with different configurations
 #using pointers
 #createExecutable("CoMD-RHT-UP" ${FLAGS_USING_POINTERS})
 #createExecutable("CoMD-RHT-UP-VG" ${FLAGS_USING_POINTERS_VG})
 
 # already consumed
-#createExecutable("CoMD-RHT-AC" ${FLAGS_ALREADY_CONSUMED})
+createExecutable("CoMD-RHT-AC" ${FLAGS_ALREADY_CONSUMED})
 #createExecutable("CoMD-RHT-AC-VG" ${FLAGS_ALREADY_CONSUMED_VG})
+
+# SRMT
+createExecutable("CoMD-RHT-SRMT" ${FLAGS_SRMT})
+#createExecutable("CoMD-RHT-SRMT-VG" ${FLAGS_SRMT_VG})
+
+# no sync consumer
+#createExecutable("CoMD-RHT-NSC" ${FLAGS_NO_SYNC_CONSUMER})
+#createExecutable("CoMD-RHT-NSC-VG" ${FLAGS_NO_SYNC_CONSUMER_VG})
 
 # new limit
 #createExecutable("CoMD-RHT-NL" ${FLAGS_NEW_LIMIT})
@@ -108,3 +125,4 @@ set(FLAGS_NEW_LIMIT_INVERTED_VG " ${FLAGS_NEW_LIMIT_INVERTED} -DVAR_GROUPING=1")
 #createExecutable("CoMD-RHT-NLI" ${FLAGS_NEW_LIMIT_INVERTED})
 #createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED_VG})
 
+#createExecutable("CoMD-RHT" ${FLAGS_NEW_LIMIT_VG})
