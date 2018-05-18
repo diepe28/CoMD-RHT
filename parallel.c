@@ -165,10 +165,17 @@ int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
 
 void addIntParallel(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
-    if(currentThread == ConsumerThread){
-        printf("\n\n\nHERE IS A PROBLEM  IN ADD INT PARALLEL \n\n\n");
-        exit(34);
+//    if(currentThread == ConsumerThread){
+//        printf("\n\n\nHERE IS A PROBLEM  IN ADD INT PARALLEL \n\n\n");
+//        exit(34);
+//    }
+
+    if(currentThread == ProducerThread){
+        RHT_Produce_Volatile(count);
+    }else if(currentThread == ConsumerThread){
+        RHT_Consume_Volatile(count);
     }
+
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 #else
     for (int ii=0; ii<count; ++ii)
@@ -178,6 +185,7 @@ void addIntParallel(int* sendBuf, int* recvBuf, int count) {
 
 void addIntParallel_Producer(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
+    RHT_Produce_Volatile(count);
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     // dperez, send data to consumer
     for(int i = 0; i < count; i++){
@@ -193,6 +201,7 @@ void addIntParallel_Consumer(int* sendBuf, int* recvBuf, int count) {
 #ifdef DO_MPI
     //MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     // dperez, get data from producer
+    RHT_Consume_Volatile(count);
     for(int i = 0; i < count; i++){
         recvBuf[i] = RHT_Consume();
     }
@@ -217,6 +226,7 @@ void addRealParallel(real_t* sendBuf, real_t* recvBuf, int count) {
 
 void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
 #ifdef DO_MPI
+    RHT_Produce_Volatile(count);
     MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
 
     // dperez, send data to consumer
@@ -231,6 +241,7 @@ void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
 
 void addRealParallel_Consumer(real_t* sendBuf, real_t* recvBuf, int count) {
 #ifdef DO_MPI
+    RHT_Consume_Volatile(count);
     //MPI_Allreduce(sendBuf, recvBuf, count, REAL_MPI_TYPE, MPI_SUM, MPI_COMM_WORLD);
     // dperez, get data from producer
     for(int i = 0; i < count; i++){

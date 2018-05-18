@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 project(CoMDRHT)
 
 #set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
-set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
+#set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 

@@ -118,6 +118,9 @@ static InterpolationObject* initInterpolationObject(
    int n, real_t x0, real_t dx, real_t* data);
 static void destroyInterpolationObject(InterpolationObject** table);
 static void interpolate(InterpolationObject* table, real_t r, real_t* f, real_t* df);
+static void interpolate_Producer(InterpolationObject* table, real_t r, real_t* f, real_t* df);
+static void interpolate_Consumer(InterpolationObject* table, real_t r, real_t* f, real_t* df);
+
 static void bcastInterpolationObject(InterpolationObject** table);
 static void printTableData(InterpolationObject* table, const char* fileName);
 
@@ -414,9 +417,9 @@ int eamForce_Producer(SimFlat* s) {
                     RHT_Produce_Secure(r);
 
                     real_t phiTmp, dPhi, rhoTmp, dRho;
-                    interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    interpolate_Producer(pot->phi, r, &phiTmp, &dPhi);
                     //printf("Producer pot->phi: %f  phiTmp: %f dPhi: %f \n",pot->phi, phiTmp, dPhi);
-                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+                    interpolate_Producer(pot->rho, r, &rhoTmp, &dRho);
 
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
@@ -460,7 +463,7 @@ int eamForce_Producer(SimFlat* s) {
         // loop over atoms in iBox
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
             real_t fEmbed, dfEmbed;
-            interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
+            interpolate_Producer(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
             pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
             RHT_Produce_Secure(pot->dfEmbed[iOff]);
 
@@ -514,7 +517,7 @@ int eamForce_Producer(SimFlat* s) {
                     RHT_Produce_Secure(r);
 
                     real_t rhoTmp, dRho;
-                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+                    interpolate_Producer(pot->rho, r, &rhoTmp, &dRho);
 
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
@@ -608,9 +611,9 @@ int eamForce_Consumer(SimFlat* s) {
                     RHT_Consume_Check(r);
 
                     real_t phiTmp, dPhi, rhoTmp, dRho;
-                    interpolate(pot->phi, r, &phiTmp, &dPhi);
+                    interpolate_Consumer(pot->phi, r, &phiTmp, &dPhi);
                     //printf("Consumer pot->phi: %f  phiTmp: %f dPhi: %f \n", pot->phi, phiTmp, dPhi);
-                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+                    interpolate_Consumer(pot->rho, r, &rhoTmp, &dRho);
 
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
@@ -654,7 +657,7 @@ int eamForce_Consumer(SimFlat* s) {
         // loop over atoms in iBox
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
             real_t fEmbed, dfEmbed;
-            interpolate(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
+            interpolate_Consumer(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
             pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
             RHT_Consume_Check(pot->dfEmbed[iOff]);
 
@@ -707,7 +710,7 @@ int eamForce_Consumer(SimFlat* s) {
                     RHT_Consume_Check(r);
 
                     real_t rhoTmp, dRho;
-                    interpolate(pot->rho, r, &rhoTmp, &dRho);
+                    interpolate_Consumer(pot->rho, r, &rhoTmp, &dRho);
 
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
@@ -913,6 +916,70 @@ void interpolate(InterpolationObject* table, real_t r, real_t* f, real_t* df) {
     *f = tt[ii] + 0.5 * r * (g1 + r * (tt[ii + 1] + tt[ii - 1] - 2.0 * tt[ii]));
 
     *df = 0.5 * (g1 + r * (g2 - g1)) * table->invDx;
+}
+
+void interpolate_Producer(InterpolationObject* table, real_t r, real_t* f, real_t* df) {
+    const real_t *tt = table->values; // alias
+
+    if (r < table->x0) r = table->x0;
+
+    r = (r - table->x0) * (table->invDx);
+    RHT_Produce_Secure(r);
+
+    int ii = (int) floor(r);
+    if (ii > table->n) {
+        ii = table->n;
+        RHT_Produce_Secure(ii);
+
+        r = table->n / table->invDx;
+        RHT_Produce_Secure(r);
+    }
+    // reset r to fractional distance
+    r = r - floor(r);
+    RHT_Produce_Secure(r);
+
+    real_t g1 = tt[ii + 1] - tt[ii - 1];
+    real_t g2 = tt[ii + 2] - tt[ii];
+    RHT_Produce_Secure(g1);
+    RHT_Produce_Secure(g2);
+
+    *f = tt[ii] + 0.5 * r * (g1 + r * (tt[ii + 1] + tt[ii - 1] - 2.0 * tt[ii]));
+    RHT_Produce_Secure(*f);
+
+    *df = 0.5 * (g1 + r * (g2 - g1)) * table->invDx;
+    RHT_Produce_Secure(*df);
+}
+
+void interpolate_Consumer(InterpolationObject* table, real_t r, real_t* f, real_t* df) {
+    const real_t *tt = table->values; // alias
+
+    if (r < table->x0) r = table->x0;
+
+    r = (r - table->x0) * (table->invDx);
+    RHT_Consume_Check(r);
+
+    int ii = (int) floor(r);
+    if (ii > table->n) {
+        ii = table->n;
+        RHT_Consume_Check(ii);
+
+        r = table->n / table->invDx;
+        RHT_Consume_Check(r);
+    }
+    // reset r to fractional distance
+    r = r - floor(r);
+    RHT_Consume_Check(r);
+
+    real_t g1 = tt[ii + 1] - tt[ii - 1];
+    real_t g2 = tt[ii + 2] - tt[ii];
+    RHT_Consume_Check(g1);
+    RHT_Consume_Check(g2);
+
+    *f = tt[ii] + 0.5 * r * (g1 + r * (tt[ii + 1] + tt[ii - 1] - 2.0 * tt[ii]));
+    RHT_Consume_Check(*f);
+
+    *df = 0.5 * (g1 + r * (g2 - g1)) * table->invDx;
+    RHT_Consume_Check(*df);
 }
 
 /// Broadcasts an InterpolationObject from rank 0 to all other ranks.

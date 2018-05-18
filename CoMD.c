@@ -320,6 +320,7 @@ double mainExecution_producer(Command *cmd) {
         sumAtoms_Producer(sim);
         stopTimer(commReduceTimer);
 
+        RHT_Produce_Volatile(iStep);
         printThings(sim, iStep, getElapsedTime(timestepTimer));
 
         startTimer(timestepTimer);
@@ -381,6 +382,8 @@ void consumer_thread_func(void *args) {
     int iStep = 0;
     for (; iStep < nSteps;) {
         sumAtoms_Consumer(sim);
+        RHT_Consume_Volatile(iStep);
+        //printThings(sim, iStep, getElapsedTime(timestepTimer));
         timestep_Consumer(sim, printRate, sim->dt);
         iStep += printRate;
     }
