@@ -345,7 +345,7 @@ int eamForce_Producer(SimFlat* s) {
     // set up halo exchange and internal storage on first call to forces.
     if (pot->forceExchange == NULL) {
         int maxTotalAtoms = MAXATOMS * s->boxes->nTotalBoxes;
-        RHT_Produce_Secure(maxTotalAtoms);
+        RHT_Produce(maxTotalAtoms);
 
         pot->dfEmbed = comdMalloc(maxTotalAtoms * sizeof(real_t));
         pot->rhobar = comdMalloc(maxTotalAtoms * sizeof(real_t));
@@ -358,19 +358,19 @@ int eamForce_Producer(SimFlat* s) {
     }
 
     real_t rCut2 = pot->cutoff * pot->cutoff;
-    RHT_Produce_Secure(rCut2);
+    RHT_Produce(rCut2);
 
     // zero forces / energy / rho /rhoprime
     real_t etot = 0.0;
-    RHT_Produce_Secure(etot);
+    RHT_Produce(etot);
 
     size_t size1 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real3);
     size_t size2 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size3 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size4 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
-    RHT_Produce_Secure(size1);
-    RHT_Produce_Secure(size2);
-    RHT_Produce_Secure(size3);
+    RHT_Produce(size1);
+    RHT_Produce(size2);
+    RHT_Produce(size3);
     RHT_Produce_Volatile(size4);
 
     memset(s->atoms->f, 0, size1);
@@ -382,20 +382,20 @@ int eamForce_Producer(SimFlat* s) {
     // loop over local boxes
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
-        RHT_Produce_Secure(nIBox);
+        RHT_Produce(nIBox);
 
         int nNbrBoxes = getNeighborBoxes_Producer(s->boxes, iBox, nbrBoxes);
-        RHT_Produce_Secure(nNbrBoxes);
+        RHT_Produce(nNbrBoxes);
 
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
-            RHT_Produce_Secure(jBox);
+            RHT_Produce(jBox);
 
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
-            RHT_Produce_Secure(nJBox);
+            RHT_Produce(nJBox);
 
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
@@ -407,14 +407,14 @@ int eamForce_Producer(SimFlat* s) {
                     real3 dr;
                     for (int k = 0; k < 3; k++) {
                         dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
-                        RHT_Produce_Secure(dr[k]);
+                        RHT_Produce(dr[k]);
                         r2 += dr[k] * dr[k];
-                        RHT_Produce_Secure(r2);
+                        RHT_Produce(r2);
                     }
                     if (r2 > rCut2) continue;
 
                     double r = sqrt(r2);
-                    RHT_Produce_Secure(r);
+                    RHT_Produce(r);
 
                     real_t phiTmp, dPhi, rhoTmp, dRho;
                     interpolate_Producer(pot->phi, r, &phiTmp, &dPhi);
@@ -424,7 +424,7 @@ int eamForce_Producer(SimFlat* s) {
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= dPhi * dr[k] / r;
                         s->atoms->f[jOff][k] += dPhi * dr[k] / r;
-                        RHT_Produce_Secure(s->atoms->f[jOff][k]);
+                        RHT_Produce(s->atoms->f[jOff][k]);
                     }
 
                     // update energy terms
@@ -435,18 +435,18 @@ int eamForce_Producer(SimFlat* s) {
                     else
                         etot += 0.5 * phiTmp;
 
-                    RHT_Produce_Secure(etot);
+                    RHT_Produce(etot);
 
                     s->atoms->U[iOff] += 0.5 * phiTmp;
                     s->atoms->U[jOff] += 0.5 * phiTmp;
-                    RHT_Produce_Secure(s->atoms->U[iOff]);
-                    RHT_Produce_Secure(s->atoms->U[jOff]);
+                    RHT_Produce(s->atoms->U[iOff]);
+                    RHT_Produce(s->atoms->U[jOff]);
 
                     // accumulate rhobar for each atom
                     pot->rhobar[iOff] += rhoTmp;
                     pot->rhobar[jOff] += rhoTmp;
-                    RHT_Produce_Secure(pot->rhobar[iOff]);
-                    RHT_Produce_Secure(pot->rhobar[jOff]);
+                    RHT_Produce(pot->rhobar[iOff]);
+                    RHT_Produce(pot->rhobar[jOff]);
 
                 } // loop over atoms in jBox
             } // loop over atoms in iBox
@@ -458,20 +458,20 @@ int eamForce_Producer(SimFlat* s) {
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int iOff;
         int nIBox = s->boxes->nAtoms[iBox];
-        RHT_Produce_Secure(nIBox);
+        RHT_Produce(nIBox);
 
         // loop over atoms in iBox
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
             real_t fEmbed, dfEmbed;
             interpolate_Producer(pot->f, pot->rhobar[iOff], &fEmbed, &dfEmbed);
             pot->dfEmbed[iOff] = dfEmbed; // save derivative for halo exchange
-            RHT_Produce_Secure(pot->dfEmbed[iOff]);
+            RHT_Produce(pot->dfEmbed[iOff]);
 
             etot += fEmbed;
-            RHT_Produce_Secure(etot);
+            RHT_Produce(etot);
 
             s->atoms->U[iOff] += fEmbed;
-            RHT_Produce_Secure(s->atoms->U[iOff]);
+            RHT_Produce(s->atoms->U[iOff]);
         }
     }
 
@@ -485,17 +485,17 @@ int eamForce_Producer(SimFlat* s) {
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
         int nNbrBoxes = getNeighborBoxes_Producer(s->boxes, iBox, nbrBoxes);
-        RHT_Produce_Secure(nNbrBoxes);
+        RHT_Produce(nNbrBoxes);
 
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
-            RHT_Produce_Secure(jBox);
+            RHT_Produce(jBox);
 
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
-            RHT_Produce_Secure(nJBox);
+            RHT_Produce(nJBox);
 
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
@@ -507,14 +507,14 @@ int eamForce_Producer(SimFlat* s) {
                     real3 dr;
                     for (int k = 0; k < 3; k++) {
                         dr[k] = s->atoms->r[iOff][k] - s->atoms->r[jOff][k];
-                        RHT_Produce_Secure(dr[k]);
+                        RHT_Produce(dr[k]);
                         r2 += dr[k] * dr[k];
-                        RHT_Produce_Secure(r2);
+                        RHT_Produce(r2);
                     }
                     if (r2 >= rCut2) continue;
 
                     real_t r = sqrt(r2);
-                    RHT_Produce_Secure(r);
+                    RHT_Produce(r);
 
                     real_t rhoTmp, dRho;
                     interpolate_Producer(pot->rho, r, &rhoTmp, &dRho);
@@ -522,7 +522,7 @@ int eamForce_Producer(SimFlat* s) {
                     for (int k = 0; k < 3; k++) {
                         s->atoms->f[iOff][k] -= (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
                         s->atoms->f[jOff][k] += (pot->dfEmbed[iOff] + pot->dfEmbed[jOff]) * dRho * dr[k] / r;
-                        RHT_Produce_Secure(s->atoms->f[jOff][k]);
+                        RHT_Produce(s->atoms->f[jOff][k]);
                     }
 
                 } // loop over atoms in jBox
@@ -542,7 +542,7 @@ int eamForce_Consumer(SimFlat* s) {
     // set up halo exchange and internal storage on first call to forces.
     if (pot->forceExchange == NULL) {
         int maxTotalAtoms = MAXATOMS * s->boxes->nTotalBoxes;
-        RHT_Consume_Check(maxTotalAtoms);
+        RHT_Consume_Check((double)maxTotalAtoms);
 
         pot->dfEmbed = comdMalloc(maxTotalAtoms * sizeof(real_t));
         pot->rhobar = comdMalloc(maxTotalAtoms * sizeof(real_t));
@@ -563,10 +563,10 @@ int eamForce_Consumer(SimFlat* s) {
     size_t size2 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size3 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size4 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
-    RHT_Consume_Check(size1);
-    RHT_Consume_Check(size2);
-    RHT_Consume_Check(size3);
-    RHT_Consume_Volatile(size4);
+    RHT_Consume_Check((double)size1);
+    RHT_Consume_Check((double)size2);
+    RHT_Consume_Check((double)size3);
+    RHT_Consume_Volatile((double)size4);
 
     memset(s->atoms->f, 0, size1);
     memset(s->atoms->U, 0, size2);
@@ -577,19 +577,19 @@ int eamForce_Consumer(SimFlat* s) {
     // loop over local boxes
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
         int nIBox = s->boxes->nAtoms[iBox];
-        RHT_Consume_Check(nIBox);
+        RHT_Consume_Check((double)nIBox);
         int nNbrBoxes = getNeighborBoxes_Consumer(s->boxes, iBox, nbrBoxes);
-        RHT_Consume_Check(nNbrBoxes);
+        RHT_Consume_Check((double)nNbrBoxes);
 
         // loop over neighbor boxes of iBox (some may be halo boxes)
         for (int jTmp = 0; jTmp < nNbrBoxes; jTmp++) {
             int jBox = nbrBoxes[jTmp];
-            RHT_Consume_Check(jBox);
+            RHT_Consume_Check((double)jBox);
 
             if (jBox < iBox) continue;
 
             int nJBox = s->boxes->nAtoms[jBox];
-            RHT_Consume_Check(nJBox);
+            RHT_Consume_Check((double)nJBox);
 
             // loop over atoms in iBox
             for (int iOff = MAXATOMS * iBox, ii = 0; ii < nIBox; ii++, iOff++) {
@@ -924,30 +924,30 @@ void interpolate_Producer(InterpolationObject* table, real_t r, real_t* f, real_
     if (r < table->x0) r = table->x0;
 
     r = (r - table->x0) * (table->invDx);
-    RHT_Produce_Secure(r);
+    RHT_Produce(r);
 
     int ii = (int) floor(r);
     if (ii > table->n) {
         ii = table->n;
-        RHT_Produce_Secure(ii);
+        RHT_Produce(ii);
 
         r = table->n / table->invDx;
-        RHT_Produce_Secure(r);
+        RHT_Produce(r);
     }
     // reset r to fractional distance
     r = r - floor(r);
-    RHT_Produce_Secure(r);
+    RHT_Produce(r);
 
     real_t g1 = tt[ii + 1] - tt[ii - 1];
     real_t g2 = tt[ii + 2] - tt[ii];
-    RHT_Produce_Secure(g1);
-    RHT_Produce_Secure(g2);
+    RHT_Produce(g1);
+    RHT_Produce(g2);
 
     *f = tt[ii] + 0.5 * r * (g1 + r * (tt[ii + 1] + tt[ii - 1] - 2.0 * tt[ii]));
-    RHT_Produce_Secure(*f);
+    RHT_Produce(*f);
 
     *df = 0.5 * (g1 + r * (g2 - g1)) * table->invDx;
-    RHT_Produce_Secure(*df);
+    RHT_Produce(*df);
 }
 
 void interpolate_Consumer(InterpolationObject* table, real_t r, real_t* f, real_t* df) {

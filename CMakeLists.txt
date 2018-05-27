@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.9)
 project(CoMDRHT)
 
-#set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
+set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
 #set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
@@ -15,35 +15,29 @@ set(CMAKE_CXX_STANDARD 11)
 
 #-ftree-vectorize
 
-# mpi or not
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDO_MPI -DMPICH_IGNORE_CXX_SEEK")
-
-# print output to console and files
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE -DPRINT_CMD=0")
-
 # fast math or not, there is a problem when nan values are found when this options is enabled
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
 
 # General compilation flags
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -funroll-all-loops") #just for gcc
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBRANCH_HINT=1") # should always be true
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCOUNT_QUEUE_DESYNC=0")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAPPROACH_NEW_ENQ_INDEX=0") # use with APPROACH_NEW_LIMIT
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPERCENTAGE_OF_REPLICATION=0")
+add_definitions(-DUSING_MPI -DMPICH_IGNORE_CXX_SEEK -lm -D_GNU_SOURCE)
+#add_definitions(-ftree-vectorize -flto -funroll-all-loops -mavx2)
+add_definitions(-DPRINT_OUTPUT=0 -DPERCENTAGE_OF_REPLICATION=0)
+add_definitions(-DBRANCH_HINT=1 -DCOUNT_QUEUE_DESYNC=0 -DAPPROACH_NEW_ENQ_INDEX=0)
 
-# Modify this flags to test different approaches
-set(FLAGS_CURRENT "${CMAKE_CXX_FLAGS}")
 
 # These are other approaches of the literature
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_USING_POINTERS=0")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_ALREADY_CONSUMED=0")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_SRMT=1")
+add_definitions(-DAPPROACH_USING_POINTERS=0)
+add_definitions(-DAPPROACH_ALREADY_CONSUMED=0)
+add_definitions(-DAPPROACH_WANG=1)
 
-# These are our approaches
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_CONSUMER_NO_SYNC=0")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_NEW_LIMIT=0") # new limit includes the consumer no sync
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DAPPROACH_WRITE_INVERTED_NEW_LIMIT=0")
-set(FLAGS_CURRENT "${FLAGS_CURRENT} -DVAR_GROUPING=0") # it can be used with any of the below approaches
+# # These are our approaches
+add_definitions(-DAPPROACH_CONSUMER_NO_SYNC=0)
+add_definitions(-DAPPROACH_NEW_LIMIT=0)
+add_definitions(-DAPPROACH_WRITE_INVERTED_NEW_LIMIT=0)
+add_definitions(-DVAR_GROUPING=0) # it can be used with any of the below approaches
+
+#Init flags current
+set(FLAGS_CURRENT "anything")
 
 set(SOURCE_FILES
         CoMD.c cmdLineParser.h cmdLineParser.c CoMD_info.h CoMDTypes.h
@@ -73,56 +67,50 @@ endfunction(createExecutable)
 
 
 #current, for testing
-createExecutable("CoMD-RHT" ${FLAGS_CURRENT})
+createExecutable("CoMD-RHT" ${FLAGS_CURRENT} 0)
 
 # using pointer flags
 set(FLAGS_USING_POINTERS "${CMAKE_CXX_FLAGS} -DAPPROACH_USING_POINTERS=1")
-set(FLAGS_USING_POINTERS_VG " ${FLAGS_USING_POINTERS} -DVAR_GROUPING=1")
 
 # using already consumed value flags
 set(FLAGS_ALREADY_CONSUMED "${CMAKE_CXX_FLAGS} -DAPPROACH_ALREADY_CONSUMED=1")
-set(FLAGS_ALREADY_CONSUMED_VG " ${FLAGS_ALREADY_CONSUMED} -DVAR_GROUPING=1")
 
-# using SRMT value flags
-set(FLAGS_SRMT "${CMAKE_CXX_FLAGS} -DAPPROACH_SRMT=1")
-set(FLAGS_SRMT_VG " ${FLAGS_SRMT} -DVAR_GROUPING=1")
+# using wang approach
+set(FLAGS_WANG "${CMAKE_CXX_FLAGS} APPROACH_WANG=1")
 
 # using no sync consumer approachh
 set(FLAGS_NO_SYNC_CONSUMER "${CMAKE_CXX_FLAGS} -DAPPROACH_CONSUMER_NO_SYNC=1")
-set(FLAGS_NO_SYNC_CONSUMER_VG " ${FLAGS_NO_SYNC_CONSUMER} -DVAR_GROUPING=1")
 
 # using new limit approach (includes the previous)
 set(FLAGS_NEW_LIMIT "${CMAKE_CXX_FLAGS} -DAPPROACH_NEW_LIMIT=1")
-set(FLAGS_NEW_LIMIT_VG " ${FLAGS_NEW_LIMIT} -DVAR_GROUPING=1")
 
 # using new limit write inverted approach
 set(FLAGS_NEW_LIMIT_INVERTED "${CMAKE_CXX_FLAGS} -DAPPROACH_WRITE_INVERTED_NEW_LIMIT=1")
-set(FLAGS_NEW_LIMIT_INVERTED_VG " ${FLAGS_NEW_LIMIT_INVERTED} -DVAR_GROUPING=1")
 
 
 # un comment the next lines to create multiple executables, with different configurations
 #using pointers
-#createExecutable("CoMD-RHT-UP" ${FLAGS_USING_POINTERS})
-#createExecutable("CoMD-RHT-UP-VG" ${FLAGS_USING_POINTERS_VG})
+#createExecutable("CoMD-RHT-UP" ${FLAGS_USING_POINTERS} 0)
+#createExecutable("CoMD-RHT-UP-VG" ${FLAGS_USING_POINTERS} 1)
 
 # already consumed
-createExecutable("CoMD-RHT-AC" ${FLAGS_ALREADY_CONSUMED})
-#createExecutable("CoMD-RHT-AC-VG" ${FLAGS_ALREADY_CONSUMED_VG})
+#createExecutable("CoMD-RHT-AC" ${FLAGS_ALREADY_CONSUMED} 0)
+#createExecutable("CoMD-RHT-AC-VG" ${FLAGS_ALREADY_CONSUMED} 1)
 
 # SRMT
-createExecutable("CoMD-RHT-SRMT" ${FLAGS_SRMT})
-#createExecutable("CoMD-RHT-SRMT-VG" ${FLAGS_SRMT_VG})
+#createExecutable("CoMD-RHT-SRMT" ${FLAGS_WANG} 0)
+#createExecutable("CoMD-RHT-SRMT-VG" ${FLAGS_SRMT} 1)
 
 # no sync consumer
-#createExecutable("CoMD-RHT-NSC" ${FLAGS_NO_SYNC_CONSUMER})
-#createExecutable("CoMD-RHT-NSC-VG" ${FLAGS_NO_SYNC_CONSUMER_VG})
+#createExecutable("CoMD-RHT-NSC" ${FLAGS_NO_SYNC_CONSUMER} 0)
+#createExecutable("CoMD-RHT-NSC-VG" ${FLAGS_NO_SYNC_CONSUMER} 1)
 
 # new limit
-#createExecutable("CoMD-RHT-NL" ${FLAGS_NEW_LIMIT})
-#createExecutable("CoMD-RHT-NL-VG" ${FLAGS_NEW_LIMIT_VG})
+#createExecutable("CoMD-RHT-NL" ${FLAGS_NEW_LIMIT} 0)
+#createExecutable("CoMD-RHT-NL-VG" ${FLAGS_NEW_LIMIT} 1)
 
 # new limit inverted
-#createExecutable("CoMD-RHT-NLI" ${FLAGS_NEW_LIMIT_INVERTED})
-#createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED_VG})
+#createExecutable("CoMD-RHT-NLI" ${FLAGS_NEW_LIMIT_INVERTED} 0)
+#createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED} 1)
 
-#createExecutable("CoMD-RHT" ${FLAGS_NEW_LIMIT_VG})
+#createExecutable("CoMD-RHT" ${FLAGS_NEW_LIMIT} 1)

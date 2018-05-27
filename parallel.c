@@ -123,9 +123,9 @@ int sendReceiveParallel_Producer(void* sendBuf, int sendLen, int dest,
     //dperez, replication must send data to consumer
     char * buffer = (char*) recvBuf;
     for(int i = 0; i < recvLen; i++){
-        RHT_Produce_Secure((double)buffer[i]);
+        RHT_Produce((double)buffer[i]);
     }
-    RHT_Produce_Secure(bytesReceived);
+    RHT_Produce(bytesReceived);
 
     return bytesReceived;
 #else
@@ -156,7 +156,7 @@ int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
     return bytesReceived;
 #else
     assert(source == dest);
-    RHT_Consume_Volatile(sendLen);
+    RHT_Consume_Volatile((double)sendLen);
     memcpy(recvBuf, sendBuf, sendLen);
 
     return sendLen;
@@ -189,7 +189,7 @@ void addIntParallel_Producer(int* sendBuf, int* recvBuf, int count) {
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     // dperez, send data to consumer
     for(int i = 0; i < count; i++){
-        RHT_Produce_Secure(recvBuf[i]);
+        RHT_Produce(recvBuf[i]);
     }
 #else
     for (int ii=0; ii<count; ++ii)
@@ -231,7 +231,7 @@ void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
 
     // dperez, send data to consumer
     for(int i = 0; i < count; i++){
-        RHT_Produce_Secure(recvBuf[i]);
+        RHT_Produce(recvBuf[i]);
     }
 #else
     for (int ii=0; ii<count; ++ii)

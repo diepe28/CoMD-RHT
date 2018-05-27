@@ -160,7 +160,7 @@ int getNeighborBoxes_Producer(LinkCell* boxes, int iBox, int* nbrBoxes) {
             for (int k = iz - 1; k <= iz + 1; k++) {
                 //nbrBoxes[count++] = getBoxFromTuple_Producer(boxes, i, j, k);
                 nbrBoxes[count++] = getBoxFromTuple(boxes, i, j, k);
-                RHT_Produce_Secure(nbrBoxes[count - 1]);
+                RHT_Produce(nbrBoxes[count - 1]);
             }
         }
 
@@ -272,8 +272,8 @@ int getBoxFromTuple(LinkCell* boxes, int ix, int iy, int iz) {
 int getBoxFromTuple_Producer(LinkCell* boxes, int ix, int iy, int iz) {
     int iBox = 0;
     const int *gridSize = boxes->gridSize; // alias
-    RHT_Produce_Secure(iBox);
-    RHT_Produce_Secure(*gridSize);
+    RHT_Produce(iBox);
+    RHT_Produce(*gridSize);
 
     // Halo in Z+
     if (iz == gridSize[2]) {
@@ -307,7 +307,7 @@ int getBoxFromTuple_Producer(LinkCell* boxes, int ix, int iy, int iz) {
         iBox = ix + gridSize[0] * iy + gridSize[0] * gridSize[1] * iz;
     }
 
-    //this is actually validated where is called, RHT_Produce_Secure(iBox); // every single if calculates ibox
+    //this is actually validated where is called, RHT_Produce(iBox); // every single if calculates ibox
 
     assert(iBox >= 0);
     assert(iBox < boxes->nTotalBoxes);
@@ -383,25 +383,25 @@ void moveAtom(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
 
 void moveAtom_Producer(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
     int nj = boxes->nAtoms[jBox];
-    RHT_Produce_Secure(nj);
+    RHT_Produce(nj);
 
     copyAtom_Producer(boxes, atoms, iId, iBox, nj, jBox);
     boxes->nAtoms[jBox]++;
-    RHT_Produce_Secure(boxes->nAtoms[jBox]);
+    RHT_Produce(boxes->nAtoms[jBox]);
 
     assert(boxes->nAtoms[jBox] < MAXATOMS);
 
     boxes->nAtoms[iBox]--;
-    RHT_Produce_Secure(boxes->nAtoms[iBox]);
+    RHT_Produce(boxes->nAtoms[iBox]);
 
     int ni = boxes->nAtoms[iBox];
-    RHT_Produce_Secure(ni);
+    RHT_Produce(ni);
 
     if (ni) copyAtom_Producer(boxes, atoms, ni, iBox, iId, iBox);
 
     if (jBox > boxes->nLocalBoxes) {
         --atoms->nLocal;
-        RHT_Produce_Secure(atoms->nLocal);
+        RHT_Produce(atoms->nLocal);
     }
 
     return;
@@ -409,7 +409,7 @@ void moveAtom_Producer(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBo
 
 void moveAtom_Consumer(LinkCell* boxes, Atoms* atoms, int iId, int iBox, int jBox) {
     int nj = boxes->nAtoms[jBox];
-    RHT_Consume_Check(nj);
+    RHT_Consume_Check((double)nj);
 
     copyAtom_Consumer(boxes, atoms, iId, iBox, nj, jBox);
     boxes->nAtoms[jBox]++;
@@ -467,13 +467,13 @@ void updateLinkCells_Producer(LinkCell* boxes, Atoms* atoms) {
 
     for (int iBox = 0; iBox < boxes->nLocalBoxes; ++iBox) {
         int iOff = iBox * MAXATOMS;
-        RHT_Produce_Secure(iOff);
+        RHT_Produce(iOff);
 
         int ii = 0;
-        RHT_Produce_Secure(ii);
+        RHT_Produce(ii);
         while (ii < boxes->nAtoms[iBox]) {
             int jBox = getBoxFromCoord_Producer(boxes, atoms->r[iOff + ii]);
-            RHT_Produce_Secure(jBox);
+            RHT_Produce(jBox);
 
             if (jBox != iBox)
                 moveAtom_Producer(boxes, atoms, ii, iBox, jBox);
@@ -540,9 +540,9 @@ void copyAtom_Producer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int j
     atoms->gid[jOff] = atoms->gid[iOff];
     atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
 
-    RHT_Produce_Secure(iOff);
-    RHT_Produce_Secure(jOff);
-    RHT_Produce_Secure(atoms->gid[jOff]);
+    RHT_Produce(iOff);
+    RHT_Produce(jOff);
+    RHT_Produce(atoms->gid[jOff]);
     RHT_Produce_Volatile(atoms->iSpecies[jOff]);
 
     memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
@@ -557,10 +557,10 @@ void copyAtom_Consumer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int j
     atoms->gid[jOff] = atoms->gid[iOff];
     atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
 
-    RHT_Consume_Check(iOff);
-    RHT_Consume_Check(jOff);
-    RHT_Consume_Check(atoms->gid[jOff]);
-    RHT_Consume_Volatile(atoms->iSpecies[jOff]);
+    RHT_Consume_Check((double)iOff);
+    RHT_Consume_Check((double)jOff);
+    RHT_Consume_Check((double)atoms->gid[jOff]);
+    RHT_Consume_Volatile((double)atoms->iSpecies[jOff]);
 
     memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
     memcpy(atoms->p[jOff], atoms->p[iOff], sizeof(real3));
@@ -611,16 +611,16 @@ int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]) {
     const real_t *localMin = boxes->localMin; // alias
     const real_t *localMax = boxes->localMax; // alias
     const int *gridSize = boxes->gridSize; // alias
-    RHT_Produce_Secure(*localMin);
-    RHT_Produce_Secure(*localMax);
-    RHT_Produce_Secure(*gridSize);
+    RHT_Produce(*localMin);
+    RHT_Produce(*localMax);
+    RHT_Produce(*gridSize);
 
     int ix = (int) (floor((rr[0] - localMin[0]) * boxes->invBoxSize[0]));
     int iy = (int) (floor((rr[1] - localMin[1]) * boxes->invBoxSize[1]));
     int iz = (int) (floor((rr[2] - localMin[2]) * boxes->invBoxSize[2]));
-    RHT_Produce_Secure(ix);
-    RHT_Produce_Secure(iy);
-    RHT_Produce_Secure(iz);
+    RHT_Produce(ix);
+    RHT_Produce(iy);
+    RHT_Produce(iz);
 
     // For each axis, if we are inside the local domain, make sure we get
     // a local link cell.  Otherwise, make sure we get a halo link cell.
@@ -639,9 +639,9 @@ int getBoxFromCoord_Producer(LinkCell* boxes, real_t rr[3]) {
     } else
         iz = gridSize[2];
 
-    RHT_Produce_Secure(ix);
-    RHT_Produce_Secure(iy);
-    RHT_Produce_Secure(iz);
+    RHT_Produce(ix);
+    RHT_Produce(iy);
+    RHT_Produce(iz);
     return getBoxFromTuple_Producer(boxes, ix, iy, iz);
 }
 
@@ -773,77 +773,77 @@ void getTuple_Producer(LinkCell* boxes, int iBox, int* ixp, int* iyp, int* izp) 
     // If a local box
     if (iBox < boxes->nLocalBoxes) {
         ix = iBox % gridSize[0];
-        RHT_Produce_Secure(ix);
+        RHT_Produce(ix);
 
         iBox /= gridSize[0];
-        RHT_Produce_Secure(iBox);
+        RHT_Produce(iBox);
 
         iy = iBox % gridSize[1];
-        RHT_Produce_Secure(iy);
+        RHT_Produce(iy);
 
         iz = iBox / gridSize[1];
-        RHT_Produce_Secure(iz);
+        RHT_Produce(iz);
     }
         // It's a halo box
     else {
         int ink;
         ink = iBox - boxes->nLocalBoxes;
-        RHT_Produce_Secure(ink);
+        RHT_Produce(ink);
 
         if (ink < 2 * gridSize[1] * gridSize[2]) {
             if (ink < gridSize[1] * gridSize[2]) {
                 ix = 0;
-                RHT_Produce_Secure(ix);
+                RHT_Produce(ix);
             } else {
                 ink -= gridSize[1] * gridSize[2];
                 ix = gridSize[0] + 1;
-                RHT_Produce_Secure(ink);
-                RHT_Produce_Secure(ix);
+                RHT_Produce(ink);
+                RHT_Produce(ix);
             }
             iy = 1 + ink % gridSize[1];
             iz = 1 + ink / gridSize[1];
-            RHT_Produce_Secure(iy);
-            RHT_Produce_Secure(iz);
+            RHT_Produce(iy);
+            RHT_Produce(iz);
         } else if (ink < (2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2))) {
             ink -= 2 * gridSize[2] * gridSize[1];
-            RHT_Produce_Secure(ink);
+            RHT_Produce(ink);
             if (ink < ((gridSize[0] + 2) * gridSize[2])) {
                 iy = 0;
-                RHT_Produce_Secure(iy);
+                RHT_Produce(iy);
             } else {
                 ink -= (gridSize[0] + 2) * gridSize[2];
                 iy = gridSize[1] + 1;
-                RHT_Produce_Secure(ink);
-                RHT_Produce_Secure(iy);
+                RHT_Produce(ink);
+                RHT_Produce(iy);
             }
             ix = ink % (gridSize[0] + 2);
             iz = 1 + ink / (gridSize[0] + 2);
-            RHT_Produce_Secure(ix);
-            RHT_Produce_Secure(iz);
+            RHT_Produce(ix);
+            RHT_Produce(iz);
         } else {
             ink -= 2 * gridSize[2] * (gridSize[1] + gridSize[0] + 2);
             if (ink < ((gridSize[0] + 2) * (gridSize[1] + 2))) {
                 iz = 0;
-                RHT_Produce_Secure(iz);
+                RHT_Produce(iz);
             } else {
                 ink -= (gridSize[0] + 2) * (gridSize[1] + 2);
                 iz = gridSize[2] + 1;
-                RHT_Produce_Secure(ink);
-                RHT_Produce_Secure(iz);
+                RHT_Produce(ink);
+                RHT_Produce(iz);
             }
             ix = ink % (gridSize[0] + 2);
             iy = ink / (gridSize[0] + 2);
-            RHT_Produce_Secure(ix);
-            RHT_Produce_Secure(iz);
+            RHT_Produce(ix);
+            RHT_Produce(iz);
         }
 
         // Calculated as off by 1
         ix--;
         iy--;
         iz--;
-        RHT_Produce_Secure(ix);
-        RHT_Produce_Secure(iy);
-        RHT_Produce_Secure(iz);
+        RHT_Produce(ix);
+        RHT_Produce(iy);
+        RHT_Produce(iz);
     }
 
     *ixp = ix;

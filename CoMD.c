@@ -99,6 +99,9 @@ typedef struct {
     Command* command;
 } ConsumerParams;
 
+//-D CMAKE_C_COMPILER=/usr/bin/gcc-7 -D CMAKE_CXX_COMPILER=/usr/bin/g++-7
+//-D CMAKE_C_COMPILER=/usr/bin/mpicc -D CMAKE_CXX_COMPILER=/usr/bin/mpicxx
+
 // TODO, pots must be in folder of executable
 // TODO, do not know why but when I modify the -k param it fails at the 3rd run (of the not replicated app)
 // and it does not fails for every problem size it fail for 15 15 10
@@ -119,7 +122,7 @@ int main(int argc, char** argv) {
 
     yamlAppInfo(yamlFile);
 
-#if DPRINT_CMD == 1
+#if DPRINT_OUTPUT == 1
     yamlAppInfo(screenOut);
 #endif
 
@@ -156,7 +159,7 @@ int main(int argc, char** argv) {
 
     printCmdYaml(yamlFile, &cmd);
 
-#if DPRINT_CMD == 1
+#if DPRINT_OUTPUT == 1
     printCmdYaml(screenOut, &cmd);
 #endif
 
@@ -350,9 +353,9 @@ double mainExecution_producer(Command *cmd) {
 
     timestampBarrier("CoMD Ending\n");
 
-#if APPROACH_SRMT == 1
+#if APPROACH_WANG == 1
     // done replication but UNIT might not have been reached
-    srmtQueue.enqPtr = srmtQueue.enqPtrDB;
+    wangQueue.enqPtr = wangQueue.enqPtrDB;
 #endif
 
     //dperez, this is where the replicated execution ends
@@ -382,7 +385,7 @@ void consumer_thread_func(void *args) {
     int iStep = 0;
     for (; iStep < nSteps;) {
         sumAtoms_Consumer(sim);
-        RHT_Consume_Volatile(iStep);
+        RHT_Consume_Volatile((double)iStep);
         //printThings(sim, iStep, getElapsedTime(timestepTimer));
         timestep_Consumer(sim, printRate, sim->dt);
         iStep += printRate;

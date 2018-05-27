@@ -314,8 +314,8 @@ void exchangeData(HaloExchange* haloExchange, void* data, int iAxis) {
 void exchangeData_Producer(HaloExchange* haloExchange, void* data, int iAxis) {
     enum HaloFaceOrder faceM = 2 * iAxis;
     enum HaloFaceOrder faceP = faceM + 1;
-    RHT_Produce_Secure(faceM);
-    RHT_Produce_Secure(faceP);
+    RHT_Produce(faceM);
+    RHT_Produce(faceP);
 
     char *sendBufM = comdMalloc(haloExchange->bufCapacity);
     char *sendBufP = comdMalloc(haloExchange->bufCapacity);
@@ -327,8 +327,8 @@ void exchangeData_Producer(HaloExchange* haloExchange, void* data, int iAxis) {
 
     int nbrRankM = haloExchange->nbrRank[faceM];
     int nbrRankP = haloExchange->nbrRank[faceP];
-    RHT_Produce_Secure(nbrRankM);
-    RHT_Produce_Secure(nbrRankP);
+    RHT_Produce(nbrRankM);
+    RHT_Produce(nbrRankP);
 
     int nRecvM, nRecvP;
 
@@ -757,17 +757,17 @@ void sortAtomsInCell_Producer(Atoms* atoms, LinkCell* boxes, int iBox) {
         tmp[iTmp].px = atoms->p[ii][0];
         tmp[iTmp].py = atoms->p[ii][1];
         tmp[iTmp].pz = atoms->p[ii][2];
-        RHT_Produce_Secure(tmp[iTmp].gid);
-        RHT_Produce_Secure(tmp[iTmp].type);
-        RHT_Produce_Secure(tmp[iTmp].rx);
-        RHT_Produce_Secure(tmp[iTmp].ry);
-        RHT_Produce_Secure(tmp[iTmp].rz);
-        RHT_Produce_Secure(tmp[iTmp].px);
-        RHT_Produce_Secure(tmp[iTmp].py);
-        RHT_Produce_Secure(tmp[iTmp].pz);
+        RHT_Produce(tmp[iTmp].gid);
+        RHT_Produce(tmp[iTmp].type);
+        RHT_Produce(tmp[iTmp].rx);
+        RHT_Produce(tmp[iTmp].ry);
+        RHT_Produce(tmp[iTmp].rz);
+        RHT_Produce(tmp[iTmp].px);
+        RHT_Produce(tmp[iTmp].py);
+        RHT_Produce(tmp[iTmp].pz);
     }
 
-    RHT_Produce_Secure(nAtoms);
+    RHT_Produce(nAtoms);
     RHT_Produce_Volatile(sizeof(AtomMsg));
     qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
 
@@ -780,14 +780,14 @@ void sortAtomsInCell_Producer(Atoms* atoms, LinkCell* boxes, int iBox) {
         atoms->p[ii][0] = tmp[iTmp].px;
         atoms->p[ii][1] = tmp[iTmp].py;
         atoms->p[ii][2] = tmp[iTmp].pz;
-        RHT_Produce_Secure(atoms->gid[ii]);
-        RHT_Produce_Secure(atoms->iSpecies[ii]);
-        RHT_Produce_Secure(atoms->r[ii][0]);
-        RHT_Produce_Secure(atoms->r[ii][1]);
-        RHT_Produce_Secure(atoms->r[ii][2]);
-        RHT_Produce_Secure(atoms->p[ii][0]);
-        RHT_Produce_Secure(atoms->p[ii][1]);
-        RHT_Produce_Secure(atoms->p[ii][2]);
+        RHT_Produce(atoms->gid[ii]);
+        RHT_Produce(atoms->iSpecies[ii]);
+        RHT_Produce(atoms->r[ii][0]);
+        RHT_Produce(atoms->r[ii][1]);
+        RHT_Produce(atoms->r[ii][2]);
+        RHT_Produce(atoms->p[ii][0]);
+        RHT_Produce(atoms->p[ii][1]);
+        RHT_Produce(atoms->p[ii][2]);
     }
 
 }
@@ -819,7 +819,7 @@ void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
         RHT_Consume_Check(tmp[iTmp].pz);
     }
 
-    RHT_Consume_Check(nAtoms);
+    RHT_Consume_Check((double)nAtoms);
     RHT_Consume_Volatile(sizeof(AtomMsg));
     qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
 
