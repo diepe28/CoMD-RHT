@@ -355,7 +355,7 @@ double mainExecution_producer(Command *cmd) {
 
 #if APPROACH_WANG == 1
     // done replication but UNIT might not have been reached
-    wangQueue.enqPtr = wangQueue.enqPtrDB;
+    wangQueue.enqPtr = wangQueue.enqPtrLocal;
 #endif
 
     //dperez, this is where the replicated execution ends

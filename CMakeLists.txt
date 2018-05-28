@@ -28,13 +28,13 @@ add_definitions(-DBRANCH_HINT=1 -DCOUNT_QUEUE_DESYNC=0 -DAPPROACH_NEW_ENQ_INDEX=
 # These are other approaches of the literature
 add_definitions(-DAPPROACH_USING_POINTERS=0)
 add_definitions(-DAPPROACH_ALREADY_CONSUMED=0)
-add_definitions(-DAPPROACH_WANG=1)
+add_definitions(-DAPPROACH_WANG=0)
 
 # # These are our approaches
 add_definitions(-DAPPROACH_CONSUMER_NO_SYNC=0)
-add_definitions(-DAPPROACH_NEW_LIMIT=0)
+add_definitions(-DAPPROACH_NEW_LIMIT=1)
 add_definitions(-DAPPROACH_WRITE_INVERTED_NEW_LIMIT=0)
-add_definitions(-DVAR_GROUPING=0) # it can be used with any of the below approaches
+add_definitions(-DVAR_GROUPING=1) # it can be used with any of the below approaches
 
 #Init flags current
 set(FLAGS_CURRENT "anything")

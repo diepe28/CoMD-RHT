@@ -809,8 +809,8 @@ void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
         tmp[iTmp].px = atoms->p[ii][0];
         tmp[iTmp].py = atoms->p[ii][1];
         tmp[iTmp].pz = atoms->p[ii][2];
-        RHT_Consume_Check(tmp[iTmp].gid);
-        RHT_Consume_Check(tmp[iTmp].type);
+        RHT_Consume_Check((double)tmp[iTmp].gid);
+        RHT_Consume_Check((double)tmp[iTmp].type);
         RHT_Consume_Check(tmp[iTmp].rx);
         RHT_Consume_Check(tmp[iTmp].ry);
         RHT_Consume_Check(tmp[iTmp].rz);
@@ -820,7 +820,7 @@ void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
     }
 
     RHT_Consume_Check((double)nAtoms);
-    RHT_Consume_Volatile(sizeof(AtomMsg));
+    RHT_Consume_Volatile((double)sizeof(AtomMsg));
     qsort(&tmp, nAtoms, sizeof(AtomMsg), sortAtomsById);
 
     for (int ii = begin, iTmp = 0; ii < end; ++ii, ++iTmp) {
@@ -832,8 +832,8 @@ void sortAtomsInCell_Consumer(Atoms* atoms, LinkCell* boxes, int iBox) {
         atoms->p[ii][0] = tmp[iTmp].px;
         atoms->p[ii][1] = tmp[iTmp].py;
         atoms->p[ii][2] = tmp[iTmp].pz;
-        RHT_Consume_Check(atoms->gid[ii]);
-        RHT_Consume_Check(atoms->iSpecies[ii]);
+        RHT_Consume_Check((double)atoms->gid[ii]);
+        RHT_Consume_Check((double)atoms->iSpecies[ii]);
         RHT_Consume_Check(atoms->r[ii][0]);
         RHT_Consume_Check(atoms->r[ii][1]);
         RHT_Consume_Check(atoms->r[ii][2]);
