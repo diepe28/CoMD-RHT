@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
         ConsumerParams *consumerParams;
 
         for (int iterator = 0; iterator < numRuns; iterator++) {
-            RHT_Replication_Init(0);
+            RHT_Replication_Init();
             consumerParams = (ConsumerParams *) malloc(sizeof(ConsumerParams));
 
             consumerParams->command = &cmd;

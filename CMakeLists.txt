@@ -39,6 +39,8 @@ add_definitions(-DVAR_GROUPING=1) # it can be used with any of the below approac
 #Init flags current
 set(FLAGS_CURRENT "anything")
 
+add_definitions(-DSKIP_VOLATILE=0)
+
 set(SOURCE_FILES
         CoMD.c cmdLineParser.h cmdLineParser.c CoMD_info.h CoMDTypes.h
         RHT.h RHT.c
