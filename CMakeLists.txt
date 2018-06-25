@@ -31,8 +31,9 @@ add_definitions(-DAPPROACH_ALREADY_CONSUMED=0)
 add_definitions(-DAPPROACH_WANG=0)
 
 # # These are our approaches
+add_definitions(-DAPPROACH_MIX_WANG=1)
 add_definitions(-DAPPROACH_CONSUMER_NO_SYNC=0)
-add_definitions(-DAPPROACH_NEW_LIMIT=1)
+add_definitions(-DAPPROACH_NEW_LIMIT=0)
 add_definitions(-DAPPROACH_WRITE_INVERTED_NEW_LIMIT=0)
 add_definitions(-DVAR_GROUPING=1) # it can be used with any of the below approaches
 
@@ -67,7 +68,6 @@ function(createExecutable exeName compFlags)
 endfunction(createExecutable)
 
 
-
 #current, for testing
 createExecutable("CoMD-RHT" ${FLAGS_CURRENT} 0)
 
@@ -89,6 +89,8 @@ set(FLAGS_NEW_LIMIT "${CMAKE_CXX_FLAGS} -DAPPROACH_NEW_LIMIT=1")
 # using new limit write inverted approach
 set(FLAGS_NEW_LIMIT_INVERTED "${CMAKE_CXX_FLAGS} -DAPPROACH_WRITE_INVERTED_NEW_LIMIT=1")
 
+# using mix-wang approach
+set(FLAGS_MIX_WANG "APPROACH_MIX_WANG=1")
 
 # un comment the next lines to create multiple executables, with different configurations
 #using pointers
@@ -114,5 +116,9 @@ set(FLAGS_NEW_LIMIT_INVERTED "${CMAKE_CXX_FLAGS} -DAPPROACH_WRITE_INVERTED_NEW_L
 # new limit inverted
 #createExecutable("CoMD-RHT-NLI" ${FLAGS_NEW_LIMIT_INVERTED} 0)
 #createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED} 1)
+
+# # mix wang approach
+#createExecutable("CoMD-RHT-MIX" ${FLAGS_MIX_WANG} 0)
+# #createExecutable("CoMD-RHT-MIX-VG" ${FLAGS_MIX_WANG} 1)
 
 #createExecutable("CoMD-RHT" ${FLAGS_NEW_LIMIT} 1)

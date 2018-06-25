@@ -124,7 +124,7 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop patter with multiple values to produce
     // We can have the values as the last values of the macro to have a arg list separated by comma
     // and we can send the number of values to replicate in order to use the info for the var grouping
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     int enqIt = 0;
     groupVarProducer = 0.0;
 #endif
@@ -135,7 +135,7 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
             s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
 
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
             if (++enqIt == GROUP_GRANULARITY) {
                 RHT_Produce(groupVarProducer);
                 enqIt = 0;
@@ -153,7 +153,7 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
         }
     }
 
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     if (enqIt != GROUP_GRANULARITY) {
         RHT_Produce(groupVarProducer);
     }
@@ -162,7 +162,7 @@ void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advanceVelocity_Consumer(SimFlat* s, int nBoxes, real_t dt) {
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     int deqIt = 0;
     groupVarConsumer = 0.0;
 #endif
@@ -173,7 +173,7 @@ void advanceVelocity_Consumer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
             s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
 
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
             if (++deqIt == GROUP_GRANULARITY) {
                 RHT_Consume_Check(groupVarConsumer);
                 deqIt = 0;
@@ -191,7 +191,7 @@ void advanceVelocity_Consumer(SimFlat* s, int nBoxes, real_t dt) {
         }
     }
 
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     if (deqIt != GROUP_GRANULARITY) {
         RHT_Consume_Check(groupVarConsumer);
     }
@@ -212,7 +212,7 @@ void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
 
 void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop pattern with multiple values to produce, same as before
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     int enqIt = 0;
     groupVarProducer = 0.0;
 #endif
@@ -224,7 +224,7 @@ void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
             s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
             s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
             if (++enqIt == GROUP_GRANULARITY) {
                 RHT_Produce(groupVarProducer);
                 enqIt = 0;
@@ -242,7 +242,7 @@ void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
         }
     }
 
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     if (enqIt != GROUP_GRANULARITY) {
         RHT_Produce(groupVarProducer);
     }
@@ -252,7 +252,7 @@ void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
 
 void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
     // TODO improve macro to support this loop pattern with multiple values to produce, same as before
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     int deqIt = 0;
     groupVarConsumer = 0.0;
 #endif
@@ -264,7 +264,7 @@ void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
             s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
             s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
             if (++deqIt == GROUP_GRANULARITY) {
                 RHT_Consume_Check(groupVarConsumer);
                 deqIt = 0;
@@ -282,7 +282,7 @@ void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
         }
     }
 
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0
+#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
     if (deqIt != GROUP_GRANULARITY) {
         RHT_Consume_Check(groupVarConsumer);
     }
