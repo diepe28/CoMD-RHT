@@ -704,7 +704,7 @@ void validateResult(const Validate* val, SimFlat* sim) {
 }
 
 void sumAtoms(SimFlat* s) {
-   // sum atoms across all processers
+   // sum atoms across all processors
    s->atoms->nLocal = 0;
    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
       s->atoms->nLocal += s->boxes->nAtoms[i];
@@ -716,10 +716,13 @@ void sumAtoms(SimFlat* s) {
 }
 
 void sumAtoms_Producer(SimFlat* s) {
-    // sum atoms across all processers
+    // sum atoms across all processors
     s->atoms->nLocal = 0;
     int i =0;
-    replicate_loop_producer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
+    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
+        s->atoms->nLocal += s->boxes->nAtoms[i];
+        /*-- RHT -- */ RHT_Produce(s->atoms->nLocal);
+    }
 
     startTimer(commReduceTimer);
     addIntParallel_Producer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);
@@ -727,10 +730,13 @@ void sumAtoms_Producer(SimFlat* s) {
 }
 
 void sumAtoms_Consumer(SimFlat* s) {
-    // sum atoms across all processers
+    // sum atoms across all processors
     s->atoms->nLocal = 0;
     int i =0;
-    replicate_loop_consumer(0, s->boxes->nLocalBoxes, i, i++, s->atoms->nLocal, s->atoms->nLocal += s->boxes->nAtoms[i])
+    for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
+        s->atoms->nLocal += s->boxes->nAtoms[i];
+        /*-- RHT -- */ RHT_Consume_Check(s->atoms->nLocal);
+    }
 
     //startTimer(commReduceTimer);
     addIntParallel_Consumer(&s->atoms->nLocal, &s->atoms->nGlobal, 1);

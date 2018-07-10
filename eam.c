@@ -785,7 +785,7 @@ void eamBcastPotential(EamPotential* pot) {
         bcastParallel(&buf, sizeof(buf), 0);
 
     // dperez, this code was added
-    // after this points all producers have the data, it must be sent to consumer
+    // after this points all producers have the data, but it must be sent to consumer
     if(currentThread == ProducerThread){
         bufConsumer.cutoff = buf.cutoff;
         bufConsumer.mass = buf.mass;

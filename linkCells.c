@@ -692,13 +692,15 @@ void emptyHaloCells(LinkCell* boxes) {
 }
 
 void emptyHaloCells_Producer(LinkCell* boxes) {
-    int ii = boxes->nLocalBoxes;
-    replicate_loop_producer(boxes->nLocalBoxes,boxes->nTotalBoxes, ii, ++ii,boxes->nAtoms[ii],boxes->nAtoms[ii] = 0;)
+    for (int ii = boxes->nLocalBoxes; ii < boxes->nTotalBoxes; ++ii) {
+        boxes->nAtoms[ii] = 0;
+    }
 }
 
 void emptyHaloCells_Consumer(LinkCell* boxes) {
-    int ii = boxes->nLocalBoxes;
-    replicate_loop_consumer(boxes->nLocalBoxes,boxes->nTotalBoxes, ii, ++ii,boxes->nAtoms[ii],boxes->nAtoms[ii] = 0;)
+    for (int ii = boxes->nLocalBoxes; ii < boxes->nTotalBoxes; ++ii) {
+        boxes->nAtoms[ii] = 0;
+    }
 }
 
 /// Get the grid coordinates of the link cell with index iBox.  Local

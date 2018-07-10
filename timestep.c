@@ -121,81 +121,29 @@ void advanceVelocity(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advanceVelocity_Producer(SimFlat* s, int nBoxes, real_t dt) {
-    // TODO improve macro to support this loop patter with multiple values to produce
-    // We can have the values as the last values of the macro to have a arg list separated by comma
-    // and we can send the number of values to replicate in order to use the info for the var grouping
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    int enqIt = 0;
-    groupVarProducer = 0.0;
-#endif
-
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             s->atoms->p[iOff][0] += dt * s->atoms->f[iOff][0];
             s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
             s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
-
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-            if (++enqIt == GROUP_GRANULARITY) {
-                RHT_Produce(groupVarProducer);
-                enqIt = 0;
-            } else {
-                groupVarProducer +=
-                        s->atoms->p[iOff][0] +
-                        s->atoms->p[iOff][1] +
-                        s->atoms->p[iOff][2];
-            }
-#else
-            RHT_Produce(s->atoms->p[iOff][0]);
-            RHT_Produce(s->atoms->p[iOff][1]);
-            RHT_Produce(s->atoms->p[iOff][2]);
-#endif
+            /*-- RHT -- */ RHT_Produce(s->atoms->p[iOff][0]);
+            /*-- RHT -- */ RHT_Produce(s->atoms->p[iOff][1]);
+            /*-- RHT -- */ RHT_Produce(s->atoms->p[iOff][0]);
         }
     }
-
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    if (enqIt != GROUP_GRANULARITY) {
-        RHT_Produce(groupVarProducer);
-    }
-#endif
-
 }
 
 void advanceVelocity_Consumer(SimFlat* s, int nBoxes, real_t dt) {
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    int deqIt = 0;
-    groupVarConsumer = 0.0;
-#endif
-
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             s->atoms->p[iOff][0] += dt * s->atoms->f[iOff][0];
             s->atoms->p[iOff][1] += dt * s->atoms->f[iOff][1];
             s->atoms->p[iOff][2] += dt * s->atoms->f[iOff][2];
-
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-            if (++deqIt == GROUP_GRANULARITY) {
-                RHT_Consume_Check(groupVarConsumer);
-                deqIt = 0;
-            } else {
-                groupVarConsumer +=
-                        s->atoms->p[iOff][0] +
-                        s->atoms->p[iOff][1] +
-                        s->atoms->p[iOff][2];
-            }
-#else
-            RHT_Consume_Check(s->atoms->p[iOff][0]);
-            RHT_Consume_Check(s->atoms->p[iOff][1]);
-            RHT_Consume_Check(s->atoms->p[iOff][2]);
-#endif
+            /*-- RHT -- */ RHT_Consume_Check(s->atoms->p[iOff][0]);
+            /*-- RHT -- */ RHT_Consume_Check(s->atoms->p[iOff][1]);
+            /*-- RHT -- */ RHT_Consume_Check(s->atoms->p[iOff][0]);
         }
     }
-
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    if (deqIt != GROUP_GRANULARITY) {
-        RHT_Consume_Check(groupVarConsumer);
-    }
-#endif
 }
 
 void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
@@ -211,12 +159,6 @@ void advancePosition(SimFlat* s, int nBoxes, real_t dt) {
 }
 
 void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
-    // TODO improve macro to support this loop pattern with multiple values to produce, same as before
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    int enqIt = 0;
-    groupVarProducer = 0.0;
-#endif
-
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             int iSpecies = s->atoms->iSpecies[iOff];
@@ -224,39 +166,14 @@ void advancePosition_Producer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
             s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
             s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-            if (++enqIt == GROUP_GRANULARITY) {
-                RHT_Produce(groupVarProducer);
-                enqIt = 0;
-            } else {
-                groupVarProducer +=
-                        s->atoms->r[iOff][0] +
-                        s->atoms->r[iOff][1] +
-                        s->atoms->r[iOff][2];
-            }
-#else
-            RHT_Produce(s->atoms->r[iOff][0]);
-            RHT_Produce(s->atoms->r[iOff][1]);
-            RHT_Produce(s->atoms->r[iOff][2]);
-#endif
+            /*-- RHT -- */ RHT_Produce(s->atoms->r[iOff][0]);
+            /*-- RHT -- */ RHT_Produce(s->atoms->r[iOff][1]);
+            /*-- RHT -- */ RHT_Produce(s->atoms->r[iOff][2]);
         }
     }
-
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    if (enqIt != GROUP_GRANULARITY) {
-        RHT_Produce(groupVarProducer);
-    }
-#endif
-
 }
 
 void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
-    // TODO improve macro to support this loop pattern with multiple values to produce, same as before
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    int deqIt = 0;
-    groupVarConsumer = 0.0;
-#endif
-
     for (int iBox = 0; iBox < nBoxes; iBox++) {
         for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
             int iSpecies = s->atoms->iSpecies[iOff];
@@ -264,29 +181,11 @@ void advancePosition_Consumer(SimFlat* s, int nBoxes, real_t dt) {
             s->atoms->r[iOff][0] += dt * s->atoms->p[iOff][0] * invMass;
             s->atoms->r[iOff][1] += dt * s->atoms->p[iOff][1] * invMass;
             s->atoms->r[iOff][2] += dt * s->atoms->p[iOff][2] * invMass;
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-            if (++deqIt == GROUP_GRANULARITY) {
-                RHT_Consume_Check(groupVarConsumer);
-                deqIt = 0;
-            } else {
-                groupVarConsumer +=
-                        s->atoms->r[iOff][0] +
-                        s->atoms->r[iOff][1] +
-                        s->atoms->r[iOff][2];
-            }
-#else
-            RHT_Consume_Check(s->atoms->r[iOff][0]);
-            RHT_Consume_Check(s->atoms->r[iOff][1]);
-            RHT_Consume_Check(s->atoms->r[iOff][2]);
-#endif
+            /*-- RHT -- */ RHT_Consume_Check(s->atoms->r[iOff][0]);
+            /*-- RHT -- */ RHT_Consume_Check(s->atoms->r[iOff][1]);
+            /*-- RHT -- */ RHT_Consume_Check(s->atoms->r[iOff][2]);
         }
     }
-
-#if VAR_GROUPING == 1 && APPROACH_ALREADY_CONSUMED == 0 && APPROACH_WANG == 0 && APPROACH_MIX_WANG == 0
-    if (deqIt != GROUP_GRANULARITY) {
-        RHT_Consume_Check(groupVarConsumer);
-    }
-#endif
 }
 
 /// Calculates total kinetic and potential energy across all tasks.  The
@@ -322,15 +221,14 @@ void kineticEnergy_Producer(SimFlat* s) {
     RHT_Produce(eLocal[1]);
 
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
-        int iOff = MAXATOMS * iBox, ii = 0;
-        replicate_loop_producer(0, s->boxes->nAtoms[iBox], ii,
-                                ii++ && iOff++, // a way to get multiple values changed per iteration
-                                eLocal[1],
-                                int iSpecies = s->atoms->iSpecies[iOff];
-                                        real_t invMass = 0.5 / s->species[iSpecies].mass;
-                                        eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
-                                                      s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
-                                                      s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;)
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t invMass = 0.5 / s->species[iSpecies].mass;
+            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
+            /*-- RHT -- */ RHT_Produce(eLocal[1]);
+        }
     }
 
     real_t eSum[2];
@@ -350,15 +248,14 @@ void kineticEnergy_Consumer(SimFlat* s) {
     RHT_Consume_Check(eLocal[1]);
 
     for (int iBox = 0; iBox < s->boxes->nLocalBoxes; iBox++) {
-        int iOff = MAXATOMS * iBox, ii = 0;
-        replicate_loop_consumer(0, s->boxes->nAtoms[iBox], ii,
-                                ii++ && iOff++, // a way to get multiple values changed per iteration
-                                eLocal[1],
-                                int iSpecies = s->atoms->iSpecies[iOff];
-                                        real_t invMass = 0.5 / s->species[iSpecies].mass;
-                                        eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
-                                                      s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
-                                                      s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;)
+        for (int iOff = MAXATOMS * iBox, ii = 0; ii < s->boxes->nAtoms[iBox]; ii++, iOff++) {
+            int iSpecies = s->atoms->iSpecies[iOff];
+            real_t invMass = 0.5 / s->species[iSpecies].mass;
+            eLocal[1] += (s->atoms->p[iOff][0] * s->atoms->p[iOff][0] +
+                          s->atoms->p[iOff][1] * s->atoms->p[iOff][1] +
+                          s->atoms->p[iOff][2] * s->atoms->p[iOff][2]) * invMass;
+            /*-- RHT -- */ RHT_Consume_Check(eLocal[1]);
+        }
     }
 
     real_t eSum[2];
