@@ -123,9 +123,9 @@ int sendReceiveParallel_Producer(void* sendBuf, int sendLen, int dest,
     //dperez, replication must send data to consumer
     char * buffer = (char*) recvBuf;
     for(int i = 0; i < recvLen; i++){
-        RHT_Produce((double)buffer[i]);
+        RHT_Produce_NoCheck((double)buffer[i]);
     }
-    RHT_Produce(bytesReceived);
+    RHT_Produce_NoCheck(bytesReceived);
 
     return bytesReceived;
 #else
@@ -189,7 +189,7 @@ void addIntParallel_Producer(int* sendBuf, int* recvBuf, int count) {
     MPI_Allreduce(sendBuf, recvBuf, count, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
     // dperez, send data to consumer
     for(int i = 0; i < count; i++){
-        RHT_Produce(recvBuf[i]);
+        RHT_Produce_NoCheck(recvBuf[i]);
     }
 #else
     for (int ii=0; ii<count; ++ii)
@@ -231,7 +231,7 @@ void addRealParallel_Producer(real_t* sendBuf, real_t* recvBuf, int count) {
 
     // dperez, send data to consumer
     for(int i = 0; i < count; i++){
-        RHT_Produce(recvBuf[i]);
+        RHT_Produce_NoCheck(recvBuf[i]);
     }
 #else
     for (int ii=0; ii<count; ++ii)

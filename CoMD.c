@@ -96,6 +96,7 @@ void consumer_thread_func(void * args);
 
 typedef struct {
     int executionCore;
+    int threadRank, nRanks;
     Command* command;
 } ConsumerParams;
 
@@ -126,9 +127,6 @@ int main(int argc, char** argv) {
     yamlAppInfo(screenOut);
 #endif
 
-    if (myRank == 0)
-        printf("\n-------- Will execute the ");
-
     if (argc > 15) {
         replicated = 1;
         //-e -i 1 -j 1 -k 1 -x 5 -y 5 -z 5 3 2 1 3, the last 4 params are ours, is 2 + numThreads
@@ -140,15 +138,14 @@ int main(int argc, char** argv) {
         consumerCore = atoi(argv[myRank * 2 + 17]);
 
         if(myRank == 0)
-            printf("Replicated version -- Cores: %d,%d --", producerCore, consumerCore);
-    } else {
-        if (myRank == 0)
-            printf("NOT Replicated version %d,%d -- ", producerCore, consumerCore);
-        numRuns = atoi(argv[14]);
-    }
+            printf("Executing replicated version %d times\n\n", numRuns);
 
-    if(myRank == 0)
-        printf(" %d times\n\n", numRuns);
+        printf("Rank %d with cores: %d,%d \n", myRank, producerCore, consumerCore);
+    } else {
+        numRuns = atoi(argv[14]);
+        if (myRank == 0)
+            printf("Executing NOT Replicated version %d times \n", numRuns);
+    }
 
     Command cmd;
     if(replicated) {
@@ -174,6 +171,8 @@ int main(int argc, char** argv) {
 
             consumerParams->command = &cmd;
             consumerParams->executionCore = consumerCore;
+            consumerParams->threadRank = myRank;
+            consumerParams->nRanks = nRanks;
 
             pthread_t myThread;
             int err = pthread_create(&myThread, NULL, (void *(*)(void *)) consumer_thread_func,
@@ -244,6 +243,7 @@ int main(int argc, char** argv) {
 double mainExecution(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
+
     SimFlat *sim = initSimulation((*cmd));
 #if PRINT_CMD == 1
     printSimulationDataYaml(yamlFile, sim);
@@ -311,6 +311,7 @@ double mainExecution(Command *cmd) {
 double mainExecution_producer(Command *cmd) {
     struct timespec startExe, endExe;
     double elapsedExe = 0;
+
     SimFlat *sim = initSimulation_Producer((*cmd));
 
 #if PRINT_CMD == 1
@@ -387,8 +388,10 @@ void consumer_thread_func(void *args) {
     ConsumerParams *params = (ConsumerParams *) args;
     Command * cmd = params->command;
     SetThreadAffinity(params->executionCore);
-
     currentThread = ConsumerThread;
+    myRank = params->threadRank;
+    nRanks = params->nRanks;
+
     SimFlat *sim = initSimulation_Consumer((*cmd));
 
     Validate *validate = initValidate_Consumer(sim); // atom counts, energy
@@ -732,7 +735,6 @@ void sumAtoms(SimFlat* s) {
 void sumAtoms_Producer(SimFlat* s) {
     // sum atoms across all processors
     s->atoms->nLocal = 0;
-    int i =0;
     for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
         s->atoms->nLocal += s->boxes->nAtoms[i];
         /*-- RHT -- */ RHT_Produce(s->atoms->nLocal);
@@ -746,7 +748,6 @@ void sumAtoms_Producer(SimFlat* s) {
 void sumAtoms_Consumer(SimFlat* s) {
     // sum atoms across all processors
     s->atoms->nLocal = 0;
-    int i =0;
     for (int i = 0; i < s->boxes->nLocalBoxes; i++) {
         s->atoms->nLocal += s->boxes->nAtoms[i];
         /*-- RHT -- */ RHT_Consume_Check(s->atoms->nLocal);
@@ -864,7 +865,7 @@ void sanityChecks(Command cmd, double cutoff, double latticeConst, char latticeT
         failCode |= 1;
         if (printRank())
             fprintf(screenOut,
-                    "\nNumber of MPI ranks must match xproc * yproc * zproc\n");
+                    "\nNumber of MPI ranks:%d must match xproc * yproc * zproc: %d\n", getNRanks(), nProcs);
     }
 
     // Check whether simulation is too small (fail code 2)
@@ -896,6 +897,15 @@ void sanityChecks(Command cmd, double cutoff, double latticeConst, char latticeT
     int checkCode = failCode;
     if(currentThread != ConsumerThread)
         bcastParallel(&checkCode, sizeof(int), 0);
+
+    //must sent check code to consumer thread
+    if(currentThread == ProducerThread){
+        RHT_Produce(checkCode);
+    }
+    if(currentThread == ConsumerThread){
+        RHT_Consume_Check(checkCode);
+    }
+
     // This assertion can only fail if different tasks failed different
     // sanity checks.  That should not be possible.
     assert(checkCode == failCode);

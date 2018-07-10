@@ -56,8 +56,10 @@ void yamlBegin(void) {
             ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec);
     sprintf(filename, "%s.%s.yaml", CoMDVariant, sdate);
     yamlFile = fopen(filename, "w");
-    if(yamlFile == NULL)
+    if(yamlFile == NULL) {
         perror("Error creating yaml file: ");
+        exit(14);
+    }
 }
 
 void yamlAppInfo(FILE* file) {

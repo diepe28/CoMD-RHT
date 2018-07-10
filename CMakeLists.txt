@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.7)
 project(CoMDRHT)
 
-set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
-#set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
+#set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
+set(CMAKE_BUILD_TYPE Debug) # NO optimizations, debuging allowed
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
@@ -22,17 +22,17 @@ set(CMAKE_CXX_STANDARD 11)
 add_definitions(-DUSING_MPI -DMPICH_IGNORE_CXX_SEEK -lm -D_GNU_SOURCE)
 #add_definitions(-ftree-vectorize -flto -funroll-all-loops -mavx2)
 add_definitions(-DPRINT_OUTPUT=0 -DPERCENTAGE_OF_REPLICATION=0)
-add_definitions(-DBRANCH_HINT=1 -DCOUNT_QUEUE_DESYNC=0 -DAPPROACH_NEW_ENQ_INDEX=0 -DDO_MPI)
+add_definitions(-DBRANCH_HINT=1 -DDO_MPI)
 
 # These are other approaches of the literature
 #add_definitions(-DAPPROACH_USING_POINTERS=1)
 #add_definitions(-DAPPROACH_ALREADY_CONSUMED=1)
-#add_definitions(-DAPPROACH_WANG=1)
+add_definitions(-DAPPROACH_WANG=1)
 
 # These are our approaches
-add_definitions(-DAPPROACH_MIX_WANG=1)
+#add_definitions(-DAPPROACH_MIX_WANG=1)
 #add_definitions(-DAPPROACH_MIX_IMPROVED=1)
-#add_definitions(-DVAR_GROUPING=1) # it can be used with any of the above approaches
+add_definitions(-DVAR_GROUPING=1) # it can be used with any of the above approaches
 
 # no longer used
 #add_definitions(-DSKIP_VOLATILE=1)
@@ -41,8 +41,6 @@ add_definitions(-DAPPROACH_MIX_WANG=1)
 
 #Init flags current
 set(FLAGS_CURRENT "anything")
-
-add_definitions(-DSKIP_VOLATILE=0)
 
 set(SOURCE_FILES
         CoMD.c cmdLineParser.h cmdLineParser.c CoMD_info.h CoMDTypes.h

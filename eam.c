@@ -785,30 +785,31 @@ void eamBcastPotential(EamPotential* pot) {
         bcastParallel(&buf, sizeof(buf), 0);
 
     // dperez, this code was added
-    // after this points all producers have the data, but it must be sent to consumer
+    // after this point, all producers have the data, but it must be sent to consumer
     if(currentThread == ProducerThread){
-        bufConsumer.cutoff = buf.cutoff;
-        bufConsumer.mass = buf.mass;
-        bufConsumer.lat = buf.lat;
-        bufConsumer.atomicNo = buf.atomicNo;
+
+        RHT_Produce_NoCheck(buf.cutoff);
+        RHT_Produce_NoCheck(buf.mass);
+        RHT_Produce_NoCheck(buf.lat);
+        RHT_Produce_NoCheck(buf.atomicNo);
+
         strcpy(bufConsumer.latticeType, buf.latticeType);
         strcpy(bufConsumer.name, buf.name);
-        dataToConsumerReader = 1;
+//        dataToConsumerReader = 1;
 //        printf("Producer: cutoff: %f, mass: %f, lat: %f, atomic: %d, type: %s name: %s \n",
-//               buf.cutoff, buf.mass, buf.lat, buf.atomicNo, buf.latticeType,buf.name
-//        );
+//               buf.cutoff, buf.mass, buf.lat, buf.atomicNo, buf.latticeType,buf.name);
     }else if(currentThread == ConsumerThread){
-        while(dataToConsumerReader == 0) asm("pause");
-        buf.cutoff = bufConsumer.cutoff;
-        buf.mass = bufConsumer.mass;
-        buf.lat = bufConsumer.lat;
-        buf.atomicNo = bufConsumer.atomicNo;
+//        while(dataToConsumerReader == 0) asm("pause");
+        buf.cutoff = RHT_Consume();
+        buf.mass = RHT_Consume();
+        buf.lat = RHT_Consume();
+        buf.atomicNo = RHT_Consume();
+
         strcpy(buf.latticeType, bufConsumer.latticeType);
         strcpy(buf.name, bufConsumer.name);
-        dataToConsumerReader = 0;
+//        dataToConsumerReader = 0;
 //        printf("Consumer: cutoff: %f, mass: %f, lat: %f, atomic: %d, type: %s name: %s \n",
-//               buf.cutoff, buf.mass, buf.lat, buf.atomicNo, buf.latticeType,buf.name
-//        );
+//               buf.cutoff, buf.mass, buf.lat, buf.atomicNo, buf.latticeType,buf.name);
     }
 
     pot->cutoff = buf.cutoff;
@@ -996,8 +997,8 @@ typedef struct {
     real_t x0, invDx;
 } buf_interpolation;
 
-buf_interpolation bufInterpolation_consumer;
-volatile int isBufInterpolationReady = 0;
+//buf_interpolation bufInterpolation_consumer;
+//volatile int isBufInterpolationReady = 0;
 real_t* table_values_consumer = 0;
 volatile int isTableValuesReady = 0;
 
@@ -1014,21 +1015,24 @@ void bcastInterpolationObject(InterpolationObject** table) {
     if(currentThread != ConsumerThread)
         bcastParallel(&buf, sizeof(buf), 0);
 
+    //after this point, all consumers have the data, but they must send it to their consumer thread
     if(currentThread == ProducerThread){
         //dperez, must send data to consumer
-        while (isBufInterpolationReady == 1) asm("pause");
+//        while (isBufInterpolationReady == 1) asm("pause");
 
-        bufInterpolation_consumer.n = buf.n;
-        bufInterpolation_consumer.x0 = buf.x0;
-        bufInterpolation_consumer.invDx = buf.invDx;
-        isBufInterpolationReady = 1;
+        RHT_Produce_NoCheck(buf.n);
+        RHT_Produce_NoCheck(buf.x0);
+        RHT_Produce_NoCheck(buf.invDx );
+
+//        isBufInterpolationReady = 1;
     }else if(currentThread == ConsumerThread){
-        while (isBufInterpolationReady == 0) asm("pause");
+//        while (isBufInterpolationReady == 0) asm("pause");
 
-        buf.n = bufInterpolation_consumer.n;
-        buf.x0 = bufInterpolation_consumer.x0;
-        buf.invDx = bufInterpolation_consumer.invDx;
-        isBufInterpolationReady = 0;
+        buf.n = (int) RHT_Consume();
+        buf.x0 = RHT_Consume();
+        buf.invDx = RHT_Consume();
+
+//        isBufInterpolationReady = 0;
     }
 
     if (getMyRank() != 0) {
@@ -1048,24 +1052,28 @@ void bcastInterpolationObject(InterpolationObject** table) {
 
     // dperez added
     if(currentThread == ProducerThread) {
-        while(isTableValuesReady == 1) asm("pause");
+//        while(isTableValuesReady == 1) asm("pause");
+
         (*table)->values--;
+
         table_values_consumer = comdMalloc(sizeof(real_t) * (buf.n + 3));
         for(int i = 0; i < (buf.n + 3); i++){
-            table_values_consumer[i] = (*table)->values[i];
+            RHT_Produce_NoCheck((*table)->values[i]);
         }
+
         (*table)->values++;
-        isTableValuesReady = 1;
+//        isTableValuesReady = 1;
 
     }else if(currentThread == ConsumerThread){
-        while(isTableValuesReady == 0) asm("pause");
+//        while(isTableValuesReady == 0) asm("pause");
 
         (*table)->values--;
         for(int i = 0; i < (buf.n + 3); i++){
-            (*table)->values[i] = table_values_consumer[i];
+            (*table)->values[i] = RHT_Consume(); //table_values_consumer[i];
         }
         (*table)->values++;
-        isTableValuesReady = 0;
+
+//        isTableValuesReady = 0;
     }
 
 }
