@@ -16,8 +16,8 @@ typedef struct RankReduceDataSt
 
 typedef enum { NotReplicatedThread, ProducerThread, ConsumerThread } ExecutionThread;
 
-extern int myRank;
-extern int nRanks;
+extern _Thread_local int myRank;
+extern _Thread_local int nRanks;
 extern _Thread_local ExecutionThread currentThread;
 
 /// Return total number of processors.

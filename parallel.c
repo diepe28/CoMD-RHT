@@ -17,8 +17,8 @@
 #include <string.h>
 #include <assert.h>
 
-int myRank = 0;
-int nRanks = 1;
+_Thread_local int myRank = 0;
+_Thread_local int nRanks = 1;
 _Thread_local ExecutionThread currentThread = ProducerThread;
 
 #ifdef DO_MPI
@@ -77,7 +77,7 @@ void destroyParallel() {
 void barrierParallel() {
 #ifdef DO_MPI
     if(currentThread == ConsumerThread){
-        printf("\n\n\nHERE IS A PROBLEM  IN BARRIER PARALLEL \n\n\n");
+        printf("\n\n\n HERE IS A PROBLEM  IN BARRIER PARALLEL \n\n\n");
         exit(34);
     }
     MPI_Barrier(MPI_COMM_WORLD);

@@ -42,46 +42,51 @@ static void getTimeString(char* timestring) {
 }
 
 void yamlBegin(void) {
-   if (!printRank())
-      return;
+    if (!printRank())
+        return;
 
-   char filename[64];
-   time_t rawtime;
-   time(&rawtime);
-   struct tm *ptm = localtime(&rawtime);
-   char sdate[25];
-   //use tm_mon+1 because tm_mon is 0 .. 11 instead of 1 .. 12
-   sprintf(sdate, "%04d:%02d:%02d-%02d:%02d:%02d",
-           ptm->tm_year + 1900, ptm->tm_mon + 1,
-           ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec);
-   sprintf(filename, "%s.%s.yaml", CoMDVariant, sdate);
-   yamlFile = fopen(filename, "w");
+    char filename[64];
+    time_t rawtime;
+    time(&rawtime);
+    struct tm *ptm = localtime(&rawtime);
+    char sdate[25];
+    //use tm_mon+1 because tm_mon is 0 .. 11 instead of 1 .. 12
+    sprintf(sdate, "%04d:%02d:%02d-%02d:%02d:%02d",
+            ptm->tm_year + 1900, ptm->tm_mon + 1,
+            ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec);
+    sprintf(filename, "%s.%s.yaml", CoMDVariant, sdate);
+    yamlFile = fopen(filename, "w");
+    if(yamlFile == NULL)
+        perror("Error creating yaml file: ");
 }
 
 void yamlAppInfo(FILE* file) {
-   if (!printRank())
-      return;
-   printSeparator(file);
-   fprintf(file, "Mini-Application Name    : %s\n", CoMDVariant);
-   fprintf(file, "Mini-Application Version : %s\n", CoMDVersion);
-   fprintf(file, "Platform:\n");
-   fprintf(file, "  hostname: %s\n", CoMD_HOSTNAME);
-   fprintf(file, "  kernel name: %s\n", CoMD_KERNEL_NAME);
-   fprintf(file, "  kernel release: %s\n", CoMD_KERNEL_RELEASE);
-   fprintf(file, "  processor: %s\n", CoMD_PROCESSOR);
-   fprintf(file, "Build:\n");
-   fprintf(file, "  CC: %s\n", CoMD_COMPILER);
-   fprintf(file, "  compiler version: %s\n", CoMD_COMPILER_VERSION);
-   fprintf(file, "  CFLAGS: %s\n", CoMD_CFLAGS);
-   fprintf(file, "  LDFLAGS: %s\n", CoMD_LDFLAGS);
-   fprintf(file, "  using MPI: %s\n", builtWithMpi() ? "true" : "false");
-   fprintf(file, "  Threading: none\n");
-   fprintf(file, "  Double Precision: %s\n", (sizeof(real_t) == sizeof(double) ? "true" : "false"));
-   char timestring[32];
-   getTimeString(timestring);
-   fprintf(file, "Run Date/Time: %s\n", timestring);
-   fprintf(file, "\n");
-   fflush(file);
+    if (!printRank())
+        return;
+    if(file){
+
+    }
+    printSeparator(file);
+    fprintf(file, "Mini-Application Name    : %s\n", CoMDVariant);
+    fprintf(file, "Mini-Application Version : %s\n", CoMDVersion);
+    fprintf(file, "Platform:\n");
+    fprintf(file, "  hostname: %s\n", CoMD_HOSTNAME);
+    fprintf(file, "  kernel name: %s\n", CoMD_KERNEL_NAME);
+    fprintf(file, "  kernel release: %s\n", CoMD_KERNEL_RELEASE);
+    fprintf(file, "  processor: %s\n", CoMD_PROCESSOR);
+    fprintf(file, "Build:\n");
+    fprintf(file, "  CC: %s\n", CoMD_COMPILER);
+    fprintf(file, "  compiler version: %s\n", CoMD_COMPILER_VERSION);
+    fprintf(file, "  CFLAGS: %s\n", CoMD_CFLAGS);
+    fprintf(file, "  LDFLAGS: %s\n", CoMD_LDFLAGS);
+    fprintf(file, "  using MPI: %s\n", builtWithMpi() ? "true" : "false");
+    fprintf(file, "  Threading: none\n");
+    fprintf(file, "  Double Precision: %s\n", (sizeof(real_t) == sizeof(double) ? "true" : "false"));
+    char timestring[32];
+    getTimeString(timestring);
+    fprintf(file, "Run Date/Time: %s\n", timestring);
+    fprintf(file, "\n");
+    fflush(file);
 }
 
 void yamlEnd(void) {

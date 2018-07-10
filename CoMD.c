@@ -111,7 +111,7 @@ int main(int argc, char** argv) {
     currentThread = NotReplicatedThread;
 
     //todo, to exactly same results on every run
-    //TimersNew();
+//    TimersNew();
 
     profileStart(totalTimer);
     initSubsystems();
