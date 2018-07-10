@@ -201,6 +201,20 @@ int main(int argc, char** argv) {
 
         if (myRank == 0) {
             printf("\n -------- Summary Replicated Version ----------- \n");
+#if APPROACH_USING_POINTERS == 1
+            printf("Using pointers: ");
+#elif APPROACH_ALREADY_CONSUMED == 1
+            printf("Using already_consumed: ");
+#elif APPROACH_WANG == 1
+            printf("Using wang approach ");
+#elif APPROACH_MIX_WANG == 1
+            printf("Using mix wang ");
+#elif APPROACH_MIX_IMPROVED == 1
+            printf("Using mix wang improved ");
+#endif
+#if VAR_GROUPING == 1
+            printf("+ VG: ");
+#endif
             printf("Mean time in seconds: %f \n\n", times / numRuns);
         }
 

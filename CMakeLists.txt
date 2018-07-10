@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.9)
+cmake_minimum_required(VERSION 3.7)
 project(CoMDRHT)
 
 set(CMAKE_BUILD_TYPE Release) # optimizations, but debuging is not allowed
@@ -54,9 +54,14 @@ set(SOURCE_FILES
         yamlOutput.h yamlOutput.c
         )
 
-function(createExecutable exeName compFlags)
+function(createExecutable exeName compFlags varFlag)
     add_executable(${exeName} ${SOURCE_FILES})
-    set_target_properties(${exeName} PROPERTIES COMPILE_FLAGS "${compFlags}")
+    #this line causes problems when used with cmake 3.7 (version of g5k machines)
+    #set_target_properties(${exeName} PROPERTIES COMPILE_FLAGS "${compFlags}")
+    set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS ${compFlags})
+    if(varFlag)
+        set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "VAR_GROUPING=1")
+    endif()
     target_link_libraries(${exeName} ${MPI_LIBRARIES})
     target_link_libraries(${exeName} pthread)
     target_link_libraries(${exeName} m) #math
@@ -79,9 +84,6 @@ set(FLAGS_USING_POINTERS "${CMAKE_CXX_FLAGS} -DAPPROACH_USING_POINTERS=1")
 # using already consumed value flags
 set(FLAGS_ALREADY_CONSUMED "${CMAKE_CXX_FLAGS} -DAPPROACH_ALREADY_CONSUMED=1")
 
-# using wang approach
-set(FLAGS_WANG "${CMAKE_CXX_FLAGS} APPROACH_WANG=1")
-
 # using no sync consumer approachh
 set(FLAGS_NO_SYNC_CONSUMER "${CMAKE_CXX_FLAGS} -DAPPROACH_CONSUMER_NO_SYNC=1")
 
@@ -91,8 +93,14 @@ set(FLAGS_NEW_LIMIT "${CMAKE_CXX_FLAGS} -DAPPROACH_NEW_LIMIT=1")
 # using new limit write inverted approach
 set(FLAGS_NEW_LIMIT_INVERTED "${CMAKE_CXX_FLAGS} -DAPPROACH_WRITE_INVERTED_NEW_LIMIT=1")
 
+# using wang approach
+set(FLAGS_WANG "${CMAKE_CXX_FLAGS} APPROACH_WANG=1")
+
 # using mix-wang approach
 set(FLAGS_MIX_WANG "APPROACH_MIX_WANG=1")
+
+# using mix-wang improved approach
+set(FLAGS_MIX_WANG_IMPROVED "DAPPROACH_MIX_IMPROVED=1")
 
 # un comment the next lines to create multiple executables, with different configurations
 #using pointers
@@ -119,8 +127,16 @@ set(FLAGS_MIX_WANG "APPROACH_MIX_WANG=1")
 #createExecutable("CoMD-RHT-NLI" ${FLAGS_NEW_LIMIT_INVERTED} 0)
 #createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED} 1)
 
-# # mix wang approach
+# wang approach
+#createExecutable("CoMD-WANG" ${FLAGS_WANG} 0)
+#createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1)
+
+# mix wang approach
 #createExecutable("CoMD-RHT-MIX" ${FLAGS_MIX_WANG} 0)
-# #createExecutable("CoMD-RHT-MIX-VG" ${FLAGS_MIX_WANG} 1)
+#createExecutable("CoMD-RHT-MIX-VG" ${FLAGS_MIX_WANG} 1)
+
+# mix wang improved approach
+#createExecutable("CoMD-MIX-IMP" ${FLAGS_MIX_WANG_IMPROVED} 0)
+#createExecutable("CoMD-MIX-IMP-VG" ${FLAGS_MIX_WANG_IMPROVED} 1)
 
 #createExecutable("CoMD-RHT" ${FLAGS_NEW_LIMIT} 1)
