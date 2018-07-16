@@ -468,7 +468,6 @@ static INLINE void Mix_Consume_Check_Improved(double trailingValue) {
 static INLINE void VG_Consume_Check(double trailingValue) {
     wangQueue.deqGroupVal += trailingValue;
     if (wangQueue.deqIter++ % GROUP_GRANULARITY == 0) {
-
 #if APPROACH_MIX_WANG == 1
         Mix_Consume_Check(wangQueue.deqGroupVal);
 #elif APPROACH_MIX_IMPROVED == 1
