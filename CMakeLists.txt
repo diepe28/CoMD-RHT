@@ -22,7 +22,7 @@ set(CMAKE_CXX_STANDARD 11)
 add_definitions(-DUSING_MPI -DMPICH_IGNORE_CXX_SEEK -DDO_MPI)
 add_definitions(-ftree-vectorize -flto -funroll-all-loops -mavx2)
 add_definitions(-DPRINT_OUTPUT=0 -DPERCENTAGE_OF_REPLICATION=0 -lm -D_GNU_SOURCE)
-add_definitions(-DBRANCH_HINT=1)
+#add_definitions(-DOUR_IMPROVEMENTS=1)
 
 # These are other approaches of the literature
 #add_definitions(-DAPPROACH_USING_POINTERS=1)
@@ -54,7 +54,7 @@ set(SOURCE_FILES
         yamlOutput.h yamlOutput.c
         )
 
-function(createExecutable exeName compFlags varFlag)
+function(createExecutable exeName compFlags varFlag ourImprovs)
     add_executable(${exeName} ${SOURCE_FILES})
     #this line causes problems when used with cmake 3.7 (version of g5k machines)
     #set_target_properties(${exeName} PROPERTIES COMPILE_FLAGS "${compFlags}")
@@ -64,6 +64,9 @@ function(createExecutable exeName compFlags varFlag)
     endif()
     if(varFlag EQUAL 2)
         set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "JUST_VOLATILES=1")
+    endif()
+    if(ourImprovs EQUAL 1)
+        set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "OUR_IMPROVEMENTS=1")
     endif()
     target_link_libraries(${exeName} ${MPI_LIBRARIES})
     target_link_libraries(${exeName} pthread)
@@ -131,9 +134,13 @@ set(FLAGS_MIX_WANG_IMPROVED "APPROACH_MIX_IMPROVED=1")
 #createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED} 1)
 
 # wang approach
-createExecutable("CoMD-WANG" ${FLAGS_WANG} 0)
-createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1)
-createExecutable("CoMD-WANG-JV" ${FLAGS_WANG} 2)
+createExecutable("CoMD-WANG" ${FLAGS_WANG} 0 0)
+createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1 0)
+createExecutable("CoMD-WANG-JV" ${FLAGS_WANG} 2 0)
+
+createExecutable("IMP-CoMD-WANG" ${FLAGS_WANG} 0 1)
+createExecutable("IMP-CoMD-WANG-VG" ${FLAGS_WANG} 1 1)
+createExecutable("IMP-CoMD-WANG-JV" ${FLAGS_WANG} 2 1)
 
 # mix wang approach
 #createExecutable("CoMD-MIX" ${FLAGS_MIX_WANG} 0)
