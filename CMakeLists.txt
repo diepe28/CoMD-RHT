@@ -82,7 +82,7 @@ endfunction(createExecutable)
 
 
 #current, for testing
-#createExecutable("CoMD-Current" ${FLAGS_CURRENT} 0)
+#createExecutable("CoMD-Current" ${FLAGS_CURRENT} 0 1)
 
 # using pointer flags
 set(FLAGS_USING_POINTERS "${CMAKE_CXX_FLAGS} -DAPPROACH_USING_POINTERS=1")
