@@ -66,6 +66,9 @@ echo "Success!!"
 #lyon
 #oarsub -p "cluster='nova'" -I -l nodes=1,walltime=5
 
+#lille
+#oarsub -p "cluster='chifflet'" -I -l nodes=1,walltime=1
+
 #kill a job (check job id at grid5k website)
 #oardel 12345
 
@@ -77,5 +80,8 @@ echo "Success!!"
 
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype.sh"
 
+#lille
+#oarsub -p "cluster='chifflet'" -l nodes=1,walltime=5 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runChifflet.sh"
 
 #ssh dperez@access.grid5000.fr
+

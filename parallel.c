@@ -114,7 +114,8 @@ int sendReceiveParallel_Producer(void* sendBuf, int sendLen, int dest,
                         void* recvBuf, int recvLen, int source) {
 #ifdef DO_MPI
     int bytesReceived;
-    MPI_Status status;
+        MPI_Status status;
+    RHT_Produce_Volatile(sendLen);
     MPI_Sendrecv(sendBuf, sendLen, MPI_BYTE, dest, 0,
                  recvBuf, recvLen, MPI_BYTE, source, 0,
                  MPI_COMM_WORLD, &status);
@@ -147,6 +148,7 @@ int sendReceiveParallel_Consumer(void* sendBuf, int sendLen, int dest,
 //                 MPI_COMM_WORLD, &status);
 //    MPI_Get_count(&status, MPI_BYTE, &bytesReceived);
     //dperez, replication must send data to consumer
+    RHT_Consume_Volatile((double)sendLen);
     char * buffer = (char*) recvBuf;
     for(int i = 0; i < recvLen; i++){
         buffer[i] = (char) RHT_Consume();

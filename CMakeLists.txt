@@ -23,11 +23,10 @@ add_definitions(-DUSING_MPI -DMPICH_IGNORE_CXX_SEEK -DDO_MPI)
 add_definitions(-ftree-vectorize -flto -funroll-all-loops -mavx2)
 add_definitions(-DPRINT_OUTPUT=0 -DPERCENTAGE_OF_REPLICATION=0 -lm -D_GNU_SOURCE)
 #add_definitions(-DOUR_IMPROVEMENTS=1)
-
 # These are other approaches of the literature
 #add_definitions(-DAPPROACH_USING_POINTERS=1)
 #add_definitions(-DAPPROACH_ALREADY_CONSUMED=1)
-#add_definitions(-DAPPROACH_WANG=1)
+add_definitions(-DAPPROACH_WANG=1)
 
 #add_definitions(-DJUST_VOLATILES=1)
 
@@ -82,7 +81,7 @@ endfunction(createExecutable)
 
 
 #current, for testing
-#createExecutable("CoMD-Current" ${FLAGS_CURRENT} 0 1)
+createExecutable("CoMD-Current" ${FLAGS_CURRENT} 0 1)
 
 # using pointer flags
 set(FLAGS_USING_POINTERS "${CMAKE_CXX_FLAGS} -DAPPROACH_USING_POINTERS=1")
@@ -134,13 +133,13 @@ set(FLAGS_MIX_WANG_IMPROVED "APPROACH_MIX_IMPROVED=1")
 #createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED} 1)
 
 # wang approach
-createExecutable("CoMD-WANG" ${FLAGS_WANG} 0 0)
-createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1 0)
-createExecutable("CoMD-WANG-JV" ${FLAGS_WANG} 2 0)
+#createExecutable("CoMD-WANG" ${FLAGS_WANG} 0 0)
+#createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1 0)
+#createExecutable("CoMD-WANG-JV" ${FLAGS_WANG} 2 0)
 
-createExecutable("IMP-CoMD-WANG" ${FLAGS_WANG} 0 1)
-createExecutable("IMP-CoMD-WANG-VG" ${FLAGS_WANG} 1 1)
-createExecutable("IMP-CoMD-WANG-JV" ${FLAGS_WANG} 2 1)
+#createExecutable("IMP-CoMD-WANG" ${FLAGS_WANG} 0 1)
+#createExecutable("IMP-CoMD-WANG-VG" ${FLAGS_WANG} 1 1)
+#createExecutable("IMP-CoMD-WANG-JV" ${FLAGS_WANG} 2 1)
 
 # mix wang approach
 #createExecutable("CoMD-MIX" ${FLAGS_MIX_WANG} 0)

@@ -119,7 +119,7 @@ int main(int argc, char** argv) {
     timestampBarrier("Starting Initialization\n");
 
     int replicated = 0, numRuns = 1, numThreads, producerCore = 0, consumerCore = 3;
-    double times = 0, currentElapsed;
+    double times[15], timesMean = 0, timesSD = 0, currentElapsed;
 
     yamlAppInfo(yamlFile);
 
@@ -188,7 +188,8 @@ int main(int argc, char** argv) {
 
             if (myRank == 0) {
                 printf("Actual Walltime[%d] in seconds: %f \n", iterator, currentElapsed);
-                times += currentElapsed;
+                times[iterator] = currentElapsed;
+                timesMean += currentElapsed;
             }
 
             // params that need to be reset each time
@@ -197,6 +198,12 @@ int main(int argc, char** argv) {
 
             RHT_Replication_Finish();
         }
+
+        timesMean /= numRuns;
+        for (int iterator = 0; iterator < numRuns; iterator++) {
+            timesSD += pow(timesMean - times[iterator], 2);
+        }
+        timesSD = sqrt(timesSD / numRuns);
 
         if (myRank == 0) {
             printf("\n -------- Summary Replicated Version ----------- \n");
@@ -214,7 +221,7 @@ int main(int argc, char** argv) {
 #if VAR_GROUPING == 1
             printf("+ VG: ");
 #endif
-            printf("Mean time in seconds: %f \n\n", times / numRuns);
+            printf("Mean time in seconds: %f with SD of: %f\n\n", timesMean, timesSD);
         }
 
     } else {
@@ -223,16 +230,22 @@ int main(int argc, char** argv) {
 
             if (myRank == 0) {
                 printf("Baseline - Walltime[%d] in seconds: %f \n", iterator, currentElapsed);
-                times += currentElapsed;
-
+                times[iterator] = currentElapsed;
+                timesMean += currentElapsed;
 //                TimersFree();
 //                TimersNew();
             }
         }
 
+        timesMean /= numRuns;
+        for (int iterator = 0; iterator < numRuns; iterator++) {
+            timesSD += pow(timesMean - times[iterator], 2);
+        }
+        timesSD = sqrt(timesSD / numRuns);
+
         if (myRank == 0) {
             printf("\n -------- Summary Baseline ----------- \n");
-            printf("Mean time in seconds: %f \n\n", times / numRuns);
+            printf("Mean time in seconds: %f with SD of: %f\n\n", timesMean, timesSD);
         }
     }
 
@@ -310,7 +323,7 @@ double mainExecution(Command *cmd) {
 
 double mainExecution_producer(Command *cmd) {
     struct timespec startExe, endExe;
-    double elapsedExe = 0;
+    double elapsedExe = 0, elapsedTime;
 
     SimFlat *sim = initSimulation_Producer((*cmd));
 
@@ -339,7 +352,9 @@ double mainExecution_producer(Command *cmd) {
         stopTimer(commReduceTimer);
 
         RHT_Produce_Volatile(iStep);
-        printThings(sim, iStep, getElapsedTime(timestepTimer));
+        elapsedTime = getElapsedTime(timestepTimer);
+        RHT_Produce_NoCheck(elapsedTime);
+        printThings_Producer(sim, iStep, elapsedTime);
 
         startTimer(timestepTimer);
         timestep_Producer(sim, printRate, sim->dt);
@@ -350,7 +365,9 @@ double mainExecution_producer(Command *cmd) {
     profileStop(loopTimer);
 
     sumAtoms_Producer(sim);
-    printThings(sim, iStep, getElapsedTime(timestepTimer));
+    elapsedTime = getElapsedTime(timestepTimer);
+    RHT_Produce_NoCheck(elapsedTime);
+    printThings_Producer(sim, iStep, elapsedTime);
     timestampBarrier("Ending simulation\n");
 
     // Epilog
@@ -391,6 +408,7 @@ void consumer_thread_func(void *args) {
     currentThread = ConsumerThread;
     myRank = params->threadRank;
     nRanks = params->nRanks;
+    double elapsedTime;
 
     SimFlat *sim = initSimulation_Consumer((*cmd));
 
@@ -403,12 +421,18 @@ void consumer_thread_func(void *args) {
     for (; iStep < nSteps;) {
         sumAtoms_Consumer(sim);
         RHT_Consume_Volatile((double)iStep);
-        //printThings(sim, iStep, getElapsedTime(timestepTimer));
+        elapsedTime = RHT_Consume();
+        printThings_Consumer(sim, iStep, elapsedTime);
         timestep_Consumer(sim, printRate, sim->dt);
         iStep += printRate;
     }
 
     sumAtoms_Consumer(sim);
+    elapsedTime = RHT_Consume();
+    printThings_Consumer(sim, iStep, elapsedTime);
+
+    // Epilog
+    //validateResult(validate, sim);
 
     destroySimulation(&sim);
     comdFree(validate);
@@ -796,6 +820,93 @@ void printThings(SimFlat* s, int iStep, double elapsedTime) {
 
    fprintf(screenOut, " %6d %10.2f %18.12f %18.12f %18.12f %12.4f %10.4f %12d\n",
            iStep, time, eTotal, eU, eK, Temp, timePerAtom, s->atoms->nGlobal);
+}
+
+void printThings_Producer(SimFlat* s, int iStep, double elapsedTime) {
+    // keep track previous value of iStep so we can calculate number of steps.
+    static int iStepPrev = -1;
+    static int firstCall = 1;
+
+    int nEval = iStep - iStepPrev; // gives nEval = 1 for zeroth step.
+    iStepPrev = iStep;
+
+    if (!printRank())
+        return;
+
+    /*-- RHT -- */ RHT_Produce_Volatile(firstCall);
+    if (firstCall) {
+        firstCall = 0;
+        fprintf(screenOut,
+                "#                                                                                         Performance\n"
+                        "#  Loop   Time(fs)       Total Energy   Potential Energy     Kinetic Energy  Temperature   (us/atom)     # Atoms\n");
+        fflush(screenOut);
+    }
+
+    real_t time = iStep * s->dt;
+    real_t eTotal = (s->ePotential + s->eKinetic) / s->atoms->nGlobal;
+    real_t eK = s->eKinetic / s->atoms->nGlobal;
+    real_t eU = s->ePotential / s->atoms->nGlobal;
+    real_t Temp = (s->eKinetic / s->atoms->nGlobal) / (kB_eV * 1.5);
+    /*-- RHT -- */ RHT_Produce(time);
+    /*-- RHT -- */ RHT_Produce(eTotal);
+    /*-- RHT -- */ RHT_Produce(eK);
+    /*-- RHT -- */ RHT_Produce(eU);
+    /*-- RHT -- */ RHT_Produce(Temp);
+
+    double timePerAtom = 1.0e6 * elapsedTime / (double) (nEval * s->atoms->nLocal);
+    /*-- RHT -- */ RHT_Produce_Volatile(timePerAtom);
+
+    if(nEval == 0)
+        printf("nEval is the zero\n");
+    if(s->atoms->nLocal == 0)
+        printf("s->atoms->nLocal is the zero\n");
+
+    fprintf(screenOut, " %6d %10.2f %18.12f %18.12f %18.12f %12.4f %10.4f %12d\n",
+            iStep, time, eTotal, eU, eK, Temp, timePerAtom, s->atoms->nGlobal);
+}
+
+void printThings_Consumer(SimFlat* s, int iStep, double elapsedTime) {
+    // keep track previous value of iStep so we can calculate number of steps.
+    static int iStepPrev = -1;
+    static int firstCall = 1;
+
+    int nEval = iStep - iStepPrev; // gives nEval = 1 for zeroth step.
+    iStepPrev = iStep;
+
+    if (myRank != 0) // (!printRank())
+        return;
+
+    /*-- RHT -- */ RHT_Consume_Volatile(firstCall);
+    if (firstCall) {
+        firstCall = 0;
+        //-- RHT -- not replicated - fprintf(screenOut,
+        //-- RHT -- not replicated -        "#                                                                                         Performance\n"
+        //-- RHT -- not replicated -"#  Loop   Time(fs)       Total Energy   Potential Energy     Kinetic Energy  Temperature   (us/atom)     # Atoms\n");
+        //-- RHT -- not replicated -fflush(screenOut);
+    }
+
+    real_t time = iStep * s->dt;
+    real_t eTotal = (s->ePotential + s->eKinetic) / s->atoms->nGlobal;
+    real_t eK = s->eKinetic / s->atoms->nGlobal;
+    real_t eU = s->ePotential / s->atoms->nGlobal;
+    real_t Temp = (s->eKinetic / s->atoms->nGlobal) / (kB_eV * 1.5);
+    /*-- RHT -- */ RHT_Consume_Check(time);
+    /*-- RHT -- */ RHT_Consume_Check(eTotal);
+    /*-- RHT -- */ RHT_Consume_Check(eK);
+    /*-- RHT -- */ RHT_Consume_Check(eU);
+    /*-- RHT -- */ RHT_Consume_Check(Temp);
+
+    double timePerAtom = 1.0e6 * elapsedTime / (double) (nEval * s->atoms->nLocal);
+    /*-- RHT -- */ RHT_Consume_Volatile(timePerAtom);
+
+    /*-- RHT -- Not Replicated
+    if(nEval == 0)
+        printf("nEval is the zero\n");
+    if(s->atoms->nLocal == 0)
+        printf("s->atoms->nLocal is the zero\n");
+
+    fprintf(screenOut, " %6d %10.2f %18.12f %18.12f %18.12f %12.4f %10.4f %12d\n",
+            iStep, time, eTotal, eU, eK, Temp, timePerAtom, s->atoms->nGlobal); */
 }
 
 /// Print information about the simulation in a format that is (mostly)

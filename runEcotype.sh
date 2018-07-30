@@ -16,16 +16,16 @@ mpirun -np 1 CoMD-WANG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 2 > replicated-
 mpirun -np 1 IMP-CoMD-WANG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 2 > IMP-replicated-wang-1rank-noHT.txt
 
 echo Running replicated wang with var grouping 1 rank noHT
-mpirun -np 1 CoMD-WANG-VG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 16 > replicated-wang-vg-1rank-HT.txt
-mpirun -np 1 IMP-CoMD-WANG-VG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 16 > IMP-replicated-wang-vg-1rank-HT.txt
+mpirun -np 1 CoMD-WANG-VG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 20 > replicated-wang-vg-1rank-HT.txt
+mpirun -np 1 IMP-CoMD-WANG-VG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 20 > IMP-replicated-wang-vg-1rank-HT.txt
 
 echo Running replicated wang with var grouping 1 rank HT
 mpirun -np 1 CoMD-WANG-VG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 2 > replicated-wang-vg-1rank-noHT.txt
 mpirun -np 1 IMP-CoMD-WANG-VG -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 2 > IMP-replicated-wang-vg-1rank-noHT.txt
 
 echo Running replicated wang just volatiles 1 rank noHT
-mpirun -np 1 CoMD-WANG-JV -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 16 > replicated-wang-jv-1rank-HT.txt
-mpirun -np 1 IMP-CoMD-WANG-JV -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 16 > IMP-replicated-wang-jv-1rank-HT.txt
+mpirun -np 1 CoMD-WANG-JV -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 20 > replicated-wang-jv-1rank-HT.txt
+mpirun -np 1 IMP-CoMD-WANG-JV -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 20 > IMP-replicated-wang-jv-1rank-HT.txt
 
 echo Running replicated wang just volatiles 1 rank HT
 mpirun -np 1 CoMD-WANG-JV -e -i 1 -j 1 -k 1 -x 30 -y 30 -z 30 5 2 0 2 > replicated-wang-jv-1rank-noHT.txt
