@@ -368,9 +368,15 @@ int eamForce_Producer(SimFlat* s) {
     size_t size2 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size3 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size4 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+#if JUST_VOLATILES == 1
+    RHT_Produce_Volatile(size1);
+    RHT_Produce_Volatile(size2);
+    RHT_Produce_Volatile(size3);
+#else
     RHT_Produce(size1);
     RHT_Produce(size2);
     RHT_Produce(size3);
+#endif
     RHT_Produce_Volatile(size4);
 
     memset(s->atoms->f, 0, size1);
@@ -563,9 +569,17 @@ int eamForce_Consumer(SimFlat* s) {
     size_t size2 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size3 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
     size_t size4 = s->boxes->nTotalBoxes * MAXATOMS * sizeof(real_t);
+
+#if JUST_VOLATILES == 1
+    RHT_Consume_Volatile((double)size1);
+    RHT_Consume_Volatile((double)size2);
+    RHT_Consume_Volatile((double)size3);
+#else
     RHT_Consume_Check((double)size1);
     RHT_Consume_Check((double)size2);
     RHT_Consume_Check((double)size3);
+#endif
+
     RHT_Consume_Volatile((double)size4);
 
     memset(s->atoms->f, 0, size1);

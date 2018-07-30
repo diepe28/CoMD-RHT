@@ -537,14 +537,12 @@ void copyAtom(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int
 void copyAtom_Producer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox) {
     const int iOff = MAXATOMS * iBox + iAtom;
     const int jOff = MAXATOMS * jBox + jAtom;
+
+    RHT_Produce_Volatile((double)iOff);
+    RHT_Produce_Volatile((double)jOff);
+
     atoms->gid[jOff] = atoms->gid[iOff];
     atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
-
-    RHT_Produce(iOff);
-    RHT_Produce(jOff);
-    RHT_Produce(atoms->gid[jOff]);
-    RHT_Produce_Volatile(atoms->iSpecies[jOff]);
-
     memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
     memcpy(atoms->p[jOff], atoms->p[iOff], sizeof(real3));
     memcpy(atoms->f[jOff], atoms->f[iOff], sizeof(real3));
@@ -554,14 +552,12 @@ void copyAtom_Producer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int j
 void copyAtom_Consumer(LinkCell* boxes, Atoms* atoms, int iAtom, int iBox, int jAtom, int jBox) {
     const int iOff = MAXATOMS * iBox + iAtom;
     const int jOff = MAXATOMS * jBox + jAtom;
+
+    RHT_Consume_Volatile((double)iOff);
+    RHT_Consume_Volatile((double)jOff);
+
     atoms->gid[jOff] = atoms->gid[iOff];
     atoms->iSpecies[jOff] = atoms->iSpecies[iOff];
-
-    RHT_Consume_Check((double)iOff);
-    RHT_Consume_Check((double)jOff);
-    RHT_Consume_Check((double)atoms->gid[jOff]);
-    RHT_Consume_Volatile((double)atoms->iSpecies[jOff]);
-
     memcpy(atoms->r[jOff], atoms->r[iOff], sizeof(real3));
     memcpy(atoms->p[jOff], atoms->p[iOff], sizeof(real3));
     memcpy(atoms->f[jOff], atoms->f[iOff], sizeof(real3));

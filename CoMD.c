@@ -82,11 +82,15 @@ static Validate* initValidate_Producer(SimFlat* s);
 static Validate* initValidate_Consumer(SimFlat* s);
 
 static void validateResult(const Validate* val, SimFlat *sim);
+static void validateResult_Producer(const Validate* val, SimFlat *sim);
+static void validateResult_Consumer(const Validate* val, SimFlat *sim);
 
 static void sumAtoms(SimFlat* s);
 static void sumAtoms_Producer(SimFlat* s);
 static void sumAtoms_Consumer(SimFlat* s);
 static void printThings(SimFlat* s, int iStep, double elapsedTime);
+static void printThings_Producer(SimFlat* s, int iStep, double elapsedTime);
+static void printThings_Consumer(SimFlat* s, int iStep, double elapsedTime);
 static void printSimulationDataYaml(FILE* file, SimFlat* s);
 static void sanityChecks(Command cmd, double cutoff, double latticeConst, char latticeType[8]);
 
@@ -351,7 +355,7 @@ double mainExecution_producer(Command *cmd) {
         sumAtoms_Producer(sim);
         stopTimer(commReduceTimer);
 
-        RHT_Produce_Volatile(iStep);
+        RHT_Produce(iStep);
         elapsedTime = getElapsedTime(timestepTimer);
         RHT_Produce_NoCheck(elapsedTime);
         printThings_Producer(sim, iStep, elapsedTime);
@@ -371,7 +375,7 @@ double mainExecution_producer(Command *cmd) {
     timestampBarrier("Ending simulation\n");
 
     // Epilog
-    validateResult(validate, sim);
+    validateResult_Producer(validate, sim);
     profileStop(totalTimer);
 
 #if PRINT_CMD == 1
@@ -420,7 +424,7 @@ void consumer_thread_func(void *args) {
     int iStep = 0;
     for (; iStep < nSteps;) {
         sumAtoms_Consumer(sim);
-        RHT_Consume_Volatile((double)iStep);
+        RHT_Consume_Check((double)iStep);
         elapsedTime = RHT_Consume();
         printThings_Consumer(sim, iStep, elapsedTime);
         timestep_Consumer(sim, printRate, sim->dt);
@@ -432,7 +436,7 @@ void consumer_thread_func(void *args) {
     printThings_Consumer(sim, iStep, elapsedTime);
 
     // Epilog
-    //validateResult(validate, sim);
+    validateResult_Consumer(validate, sim);
 
     destroySimulation(&sim);
     comdFree(validate);
@@ -742,6 +746,76 @@ void validateResult(const Validate* val, SimFlat* sim) {
          fprintf(screenOut, "#############################\n");
       }
    }
+}
+
+void validateResult_Producer(const Validate* val, SimFlat* sim) {
+    if (printRank()) {
+        real_t eFinal = (sim->ePotential + sim->eKinetic) / sim->atoms->nGlobal;
+        int nAtomsDelta = (sim->atoms->nGlobal - val->nAtoms0);
+
+#if JUST_VOLATILES == 1
+        RHT_Produce_Volatile(eFinal);
+#else
+        RHT_Produce(eFinal);
+#endif
+        RHT_Produce_Volatile(val->eTot0);
+
+        fprintf(screenOut, "\n");
+        fprintf(screenOut, "\n");
+        fprintf(screenOut, "Simulation Validation:\n");
+        fprintf(screenOut, "  Initial energy  : %14.12f\n", val->eTot0);
+        fprintf(screenOut, "  Final energy    : %14.12f\n", eFinal);
+        fprintf(screenOut, "  eFinal/eInitial : %f\n", eFinal / val->eTot0);
+
+#if JUST_VOLATILES == 1
+        RHT_Produce_Volatile(nAtomsDelta);
+#else
+        RHT_Produce(nAtomsDelta);
+#endif
+        RHT_Produce_Volatile(sim->atoms->nGlobal);
+        if (nAtomsDelta == 0) {
+            fprintf(screenOut, "  Final atom count : %d, no atoms lost\n",
+                    sim->atoms->nGlobal);
+        } else {
+            fprintf(screenOut, "#############################\n");
+            fprintf(screenOut, "# WARNING: %6d atoms lost #\n", nAtomsDelta);
+            fprintf(screenOut, "#############################\n");
+        }
+    }
+}
+
+void validateResult_Consumer(const Validate* val, SimFlat* sim) {
+    if (myRank == 0) { // (!printRank())
+        real_t eFinal = (sim->ePotential + sim->eKinetic) / sim->atoms->nGlobal;
+        int nAtomsDelta = (sim->atoms->nGlobal - val->nAtoms0);
+
+#if JUST_VOLATILES == 1
+        RHT_Consume_Volatile(eFinal);
+#else
+        RHT_Consume_Check(eFinal);
+#endif
+        RHT_Consume_Volatile(val->eTot0);
+//        fprintf(screenOut, "\n");
+//        fprintf(screenOut, "\n");
+//        fprintf(screenOut, "Simulation Validation:\n");
+//        fprintf(screenOut, "  Initial energy  : %14.12f\n", val->eTot0);
+//        fprintf(screenOut, "  Final energy    : %14.12f\n", eFinal);
+//        fprintf(screenOut, "  eFinal/eInitial : %f\n", eFinal / val->eTot0);
+
+#if JUST_VOLATILES == 1
+        RHT_Consume_Volatile(nAtomsDelta);
+#else
+        RHT_Consume_Check(nAtomsDelta);
+#endif
+        RHT_Consume_Volatile(sim->atoms->nGlobal);
+//        if (nAtomsDelta == 0) {
+//            fprintf(screenOut, "  Final atom count : %d, no atoms lost\n", sim->atoms->nGlobal);
+//        } else {
+//            fprintf(screenOut, "#############################\n");
+//            fprintf(screenOut, "# WARNING: %6d atoms lost #\n", nAtomsDelta);
+//            fprintf(screenOut, "#############################\n");
+//        }
+    }
 }
 
 void sumAtoms(SimFlat* s) {

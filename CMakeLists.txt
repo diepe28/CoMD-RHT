@@ -64,6 +64,7 @@ function(createExecutable exeName compFlags varFlag ourImprovs)
     if(varFlag EQUAL 2)
         set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "JUST_VOLATILES=1")
     endif()
+
     if(ourImprovs EQUAL 1)
         set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "OUR_IMPROVEMENTS=1")
     endif()
@@ -81,7 +82,7 @@ endfunction(createExecutable)
 
 
 #current, for testing
-createExecutable("CoMD-Current" ${FLAGS_CURRENT} 0 1)
+createExecutable("CoMD-Current" ${FLAGS_CURRENT} 2 1)
 
 # using pointer flags
 set(FLAGS_USING_POINTERS "${CMAKE_CXX_FLAGS} -DAPPROACH_USING_POINTERS=1")
