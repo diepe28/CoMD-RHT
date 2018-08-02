@@ -19,6 +19,7 @@ rm -rf $newFolder/.idea
 mkdir $newFolder/tempFolder
 cp -a $newFolder/runNova.sh ./$newFolder/tempFolder
 cp -a $newFolder/runEcotype.sh ./$newFolder/tempFolder
+cp -a $newFolder/runEcotype-testHT.sh ./$newFolder/tempFolder
 
 rm -rf $newFolder/cmake-build-debug
 
