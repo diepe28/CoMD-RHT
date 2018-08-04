@@ -80,6 +80,7 @@ echo "Success!!"
 #oarsub -p "cluster='nova'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runNova.sh"
 
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype.sh"
+#oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype-testHT.sh"
 
 #lille
 #oarsub -p "cluster='chifflet'" -l nodes=1,walltime=5 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runChifflet.sh"
