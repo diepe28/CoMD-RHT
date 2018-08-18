@@ -53,7 +53,7 @@ set(SOURCE_FILES
         yamlOutput.h yamlOutput.c
         )
 
-function(createExecutable exeName compFlags varFlag ourImprovs)
+function(createExecutable exeName compFlags varFlag ourImprovs groupSize)
     add_executable(${exeName} ${SOURCE_FILES})
     #this line causes problems when used with cmake 3.7 (version of g5k machines)
     #set_target_properties(${exeName} PROPERTIES COMPILE_FLAGS "${compFlags}")
@@ -64,10 +64,12 @@ function(createExecutable exeName compFlags varFlag ourImprovs)
     if(varFlag EQUAL 2)
         set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "JUST_VOLATILES=1")
     endif()
-
     if(ourImprovs EQUAL 1)
         set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "OUR_IMPROVEMENTS=1")
     endif()
+
+    set_property(TARGET ${exeName} APPEND PROPERTY COMPILE_DEFINITIONS "GROUP_GRANULARITY=${groupSize}")
+
     target_link_libraries(${exeName} ${MPI_LIBRARIES})
     target_link_libraries(${exeName} pthread)
     target_link_libraries(${exeName} m) #math
@@ -133,14 +135,21 @@ set(FLAGS_MIX_WANG_IMPROVED "APPROACH_MIX_IMPROVED=1")
 #createExecutable("CoMD-RHT-NLI" ${FLAGS_NEW_LIMIT_INVERTED} 0)
 #createExecutable("CoMD-RHT-NLI-VG" ${FLAGS_NEW_LIMIT_INVERTED} 1)
 
-# wang approach
-createExecutable("CoMD-WANG" ${FLAGS_WANG} 0 0)
-createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1 0)
-createExecutable("CoMD-WANG-JV" ${FLAGS_WANG} 2 0)
+createExecutable("CoMD-WANG" ${FLAGS_WANG} 0 0 0)
+createExecutable("CoMD-WANG-VG-2" ${FLAGS_WANG} 1 0 2)
+createExecutable("CoMD-WANG-VG-4" ${FLAGS_WANG} 1 0 4)
+createExecutable("CoMD-WANG-VG-8" ${FLAGS_WANG} 1 0 8)
+createExecutable("CoMD-WANG-VG-16" ${FLAGS_WANG} 1 0 16)
+createExecutable("CoMD-WANG-VG-32" ${FLAGS_WANG} 1 0 32)
 
-createExecutable("IMP-CoMD-WANG" ${FLAGS_WANG} 0 1)
-createExecutable("IMP-CoMD-WANG-VG" ${FLAGS_WANG} 1 1)
-createExecutable("IMP-CoMD-WANG-JV" ${FLAGS_WANG} 2 1)
+# wang approach
+#createExecutable("CoMD-WANG" ${FLAGS_WANG} 0 0)
+#createExecutable("CoMD-WANG-VG" ${FLAGS_WANG} 1 0)
+#createExecutable("CoMD-WANG-JV" ${FLAGS_WANG} 2 0)
+
+#createExecutable("IMP-CoMD-WANG" ${FLAGS_WANG} 0 1)
+#createExecutable("IMP-CoMD-WANG-VG" ${FLAGS_WANG} 1 1)
+#createExecutable("IMP-CoMD-WANG-JV" ${FLAGS_WANG} 2 1)
 
 # mix wang approach
 #createExecutable("CoMD-MIX" ${FLAGS_MIX_WANG} 0)

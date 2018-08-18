@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
             printf("Using mix wang improved ");
 #endif
 #if VAR_GROUPING == 1
-            printf("+ VG: ");
+            printf("+ VG %d: ", GROUP_GRANULARITY);
 #endif
             printf("Mean time in seconds: %f with SD of: %f\n\n", timesMean, timesSD);
         }

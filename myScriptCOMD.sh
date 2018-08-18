@@ -19,6 +19,7 @@ rm -rf $newFolder/.idea
 mkdir $newFolder/tempFolder
 cp -a $newFolder/runNova.sh ./$newFolder/tempFolder
 cp -a $newFolder/runEcotype.sh ./$newFolder/tempFolder
+cp -a $newFolder/runVarGrouping.sh ./$newFolder/tempFolder
 cp -a $newFolder/runEcotype-testHT.sh ./$newFolder/tempFolder
 
 rm -rf $newFolder/cmake-build-debug
@@ -46,7 +47,7 @@ echo "Success!!"
 #rm -f -r nantes/public/CoMD-RHT-Clean/ && rm -f -r nancy/public/CoMD-RHT-Clean/
 
 # Inside a node (if tar.gz was copied into public/ with appriate file structure)
-#cd public/ && tar -xzvf CoMD-RHT-Clean.tar.gz && rm CoMD-RHT-Clean.tar.gz && cd CoMD-RHT-Clean/cmake-build-debug/ && cmake .. && make
+#tar -xzvf CoMD-RHT-Clean.tar.gz && rm CoMD-RHT-Clean.tar.gz && cd CoMD-RHT-Clean/cmake-build-debug/ && cmake .. && make
 
 #sudo-g5k && sudo -H /bin/bash 
 #sudo echo "deb http://ftp.us.debian.org/debian testing main contrib non-free" > /etc/apt/sources.list.d/preferences.list &&
@@ -81,6 +82,7 @@ echo "Success!!"
 
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype.sh"
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype-testHT.sh"
+#oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runVarGrouping.sh"
 
 #lille
 #oarsub -p "cluster='chifflet'" -l nodes=1,walltime=5 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runChifflet.sh"

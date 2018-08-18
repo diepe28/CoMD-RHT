@@ -53,7 +53,8 @@ void RHT_Consume_Check(double currentValue) {
     UsingPointers_Consume_Check(currentValue);
 #elif APPROACH_ALREADY_CONSUMED == 1
     AlreadyConsumed_Consume_Check(currentValue);
-#elif VAR_GROUPING == 1 && (APPROACH_WANG == 1 || APPROACH_MIX_WANG == 1 || APPROACH_MIX_IMPROVED == 1)  // var grouping for wang and mix
+// var grouping for wang and mix
+#elif VAR_GROUPING == 1 && (APPROACH_WANG == 1 || APPROACH_MIX_WANG == 1 || APPROACH_MIX_IMPROVED == 1)
     VG_Consume_Check(currentValue);
 #elif APPROACH_WANG == 1
     Wang_Consume_Check(currentValue);
