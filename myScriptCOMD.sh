@@ -81,7 +81,7 @@ echo "Success!!"
 #oarsub -p "cluster='nova'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runNova.sh"
 
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype.sh"
-#oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runEcotype-testHT.sh"
+#oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runHT.sh"
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runVarGrouping.sh"
 #oarsub -p "cluster='ecotype'" -l nodes=1,walltime=4 "/home/dperez/public/CoMD-RHT-Clean/cmake-build-debug/runDifferentSizes.sh"
 

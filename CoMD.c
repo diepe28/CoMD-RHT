@@ -225,6 +225,11 @@ int main(int argc, char** argv) {
 #if VAR_GROUPING == 1
             printf("+ VG %d: ", GROUP_GRANULARITY);
 #endif
+
+            for (int iterator = 0; iterator < numRuns; iterator++) {
+                printf("Replicated[%d]: %f\n", iterator, times[iterator]);
+            }
+
             printf("Mean time in seconds: %f with SD of: %f\n\n", timesMean, timesSD);
         }
 
@@ -249,6 +254,11 @@ int main(int argc, char** argv) {
 
         if (myRank == 0) {
             printf("\n -------- Summary Baseline ----------- \n");
+
+            for (int iterator = 0; iterator < numRuns; iterator++) {
+                printf("Baseline[%d]: %f\n", iterator, times[iterator]);
+            }
+
             printf("Mean time in seconds: %f with SD of: %f\n\n", timesMean, timesSD);
         }
     }
